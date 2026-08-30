@@ -10928,8 +10928,6 @@ async def process_interrogation_answer(update: Update, context: ContextTypes.DEF
                 keyboard = []
                 for option in next_options:
                     keyboard.append([KeyboardButton(option)])
-                keyboard.append([KeyboardButton("🔍 Получить досье")])
-                keyboard.append([KeyboardButton("📁 Мой архив")])
             else:
                 # ⭐ Финальные кнопки ⭐
                 keyboard = [
