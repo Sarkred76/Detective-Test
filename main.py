@@ -5731,11 +5731,12 @@ async def invite_player_to_clan(
         "invited_at": int(time.time())
     }
     data["users"][target_user_id] = target_user_data
-    
-    # ⭐ Уведомляем целевого пользователя с inline-кнопками ⭐
-    # ⭐ ИСПРАВЛЕНИЕ: Загружаем данные приглашающего ⭐
-    inviter_data = data["users"].get(inviter_id, {})
 
+    # ⭐ ИСПРАВЛЕНИЕ: Сохраняем данные ПЕРЕД отправкой сообщения ⭐
+    # Это гарантирует, что когда игрок нажмёт кнопку, приглашение уже будет в файле
+    save_data(data)
+
+    # ⭐ Уведомляем целевого пользователя с inline-кнопками ⭐
     try:
         keyboard = [
             [
@@ -5743,6 +5744,8 @@ async def invite_player_to_clan(
                 InlineKeyboardButton("❌ Отказаться", callback_data="decline_clan_invite"),
             ]
         ]
+    
+        inviter_data = data["users"].get(inviter_id, {})
     
         await context.bot.send_message(
             chat_id=target_user_id,
