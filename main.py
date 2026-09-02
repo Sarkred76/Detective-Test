@@ -5999,7 +5999,7 @@ async def my_clan_view(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             f"🏰 <b>Ваш клан: {clan_name_escaped}</b>\n"
             f"{description_text}"
             f"{members_list}\n"
-            f"🪙 Бюджет клана: {clan_data.get('super_coins', 0)} супер-коинов\n\n"
+            f"🪙 Бюджет клана: {clan.get('super_coins', 0)} супер-коинов\n\n"
             f"📊 Всего участников: {len(clan['members'])}\n"
             f"📅 Создан: {datetime.datetime.fromtimestamp(clan['created_at']).strftime('%d.%m.%Y')}"
         )
