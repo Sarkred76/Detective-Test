@@ -8637,9 +8637,9 @@ async def top_clans(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             message_text += f" 👥 Участников: {clan['members']}\n"
             message_text += f" 💎 Репутация: {clan['reputation']}\n\n"
         
-        # ⭐ ПОКАЗЫВАЕМ МЕСТО КЛАНА ПОЛЬЗОВАТЕЛЯ ⭐
+        # ⭐ ИСПРАВЛЕНИЕ: Используем функцию get_user_clan для актуального ID клана ⭐
         user_id = str(update.effective_user.id)
-        user_clan_id = data.get("user_clan", {}).get(user_id)
+        user_clan_id = get_user_clan(user_id, data)
         
         if user_clan_id:
             user_clan_rank = None
