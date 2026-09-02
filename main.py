@@ -3135,7 +3135,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             free_rolls = user_data.get("free_rolls", 0)
             use_free_roll = False
 
-            super_coins_earned = 0
             # ⭐ АДМИНЫ ПРОПУСКАЮТ КУЛДАУН ⭐
             if is_super_admin:
                 # Админы всегда могут получить карту (без кулдауна)
@@ -3185,6 +3184,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             user_data["season_points"] += bonus["points"]
             user_data["cents"] += bonus["cents"]
             user_data["cards"].append(card["id"])
+            super_coins_earned = 0
             
             # ⭐ НОВОЕ: Начисление супер-коинов в клан ⭐
             user_clan_id = get_user_clan(user_id, data)
@@ -5524,8 +5524,12 @@ async def craft_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await query.answer("❌ Произошла ошибка", show_alert=True)
 
 def get_user_clan(user_id: str, data: Dict) -> Optional[str]:
-    """Возвращает название клана пользователя или None."""
-    return data.get("user_clan", {}).get(user_id)
+    """Возвращает ID клана, в котором состоит пользователь, или None."""
+    # Ищем пользователя в списках участников всех реальных кланов
+    for clan_id, clan_data in data.get("clans", {}).items():
+        if user_id in clan_data.get("members", {}):
+            return clan_id  # Возвращаем именно ID клана (строку)
+    return None
 
 def get_clan_data(clan_identifier: str, data: Dict) -> Optional[Dict]:
     """Возвращает данные клана по ID или по названию."""
