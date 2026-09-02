@@ -5732,22 +5732,162 @@ async def invite_player_to_clan(
     }
     data["users"][target_user_id] = target_user_data
     
-    # Уведомляем целевого пользователя
+    # ⭐ Уведомляем целевого пользователя с inline-кнопками ⭐
     try:
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ Принять", callback_data="accept_clan_invite"),
+                InlineKeyboardButton("❌ Отказаться", callback_data="decline_clan_invite"),
+            ]
+        ]
+    
         await context.bot.send_message(
             chat_id=target_user_id,
             text=(
-                f"🏰 Вас пригласили в клан **{inviter_clan_name}**!\n"
-                f"Для принятия приглашения используйте команду:\n"
-                f"`/accept_clan_invite`"
-                f"⏳ *Приглашение действительно в течение 1 часа.*"
+                f"🏰 <b>Вас пригласили в клан {html.escape(inviter_clan_name)}!</b>\n\n"
+                f"👑 Приглашение от: {html.escape(inviter_data.get('first_name', 'Глава клана'))}\n\n"
+                f"⏳ <i>Приглашение действительно в течение 1 часа.</i>"
             ),
-            parse_mode="Markdown"
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
         )
     except Exception as notify_error:
         logger.warning(f"Не удалось отправить уведомление о приглашении: {notify_error}")
-    
-    return True, f"Приглашение отправлено пользователю @{target_username}!"
+        return True, f"Приглашение отправлено пользователю @{target_username}!"
+
+async def accept_clan_invite_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработчик inline-кнопки 'Принять' для приглашения в клан."""
+    try:
+        query = update.callback_query
+        user_id = str(query.from_user.id)
+        data = load_data()
+        user_data = data["users"].get(user_id, {})
+        
+        invite = user_data.get("clan_invite_pending")
+        if not invite:
+            await query.answer("❌ У вас нет ожидающих приглашений!", show_alert=True)
+            return
+        
+        # ⭐ Проверка срока действия (1 час) ⭐
+        invited_at = invite.get("invited_at", 0)
+        current_time = int(time.time())
+        if current_time - invited_at > 3600:
+            user_data["clan_invite_pending"] = None
+            save_data(data)
+            await query.answer("⏳ Приглашение истекло!", show_alert=True)
+            try:
+                await query.edit_message_text(
+                    "⏳ <b>Приглашение истекло!</b>\n\n"
+                    "Срок действия приглашения — 1 час.\n"
+                    "Попросите главу клана отправить новое приглашение.",
+                    parse_mode="HTML"
+                )
+            except:
+                pass
+            return
+        
+        clan_name = invite.get("clan_name")
+        inviter_id = invite.get("inviter_id")
+        
+        # ⭐ Проверка: уже в клане? ⭐
+        if get_user_clan(user_id, data):
+            await query.answer("❌ Вы уже состоите в клане!", show_alert=True)
+            return
+        
+        clan = get_clan_data(clan_name, data)
+        if not clan:
+            await query.answer("❌ Клан больше не существует!", show_alert=True)
+            user_data["clan_invite_pending"] = None
+            save_data(data)
+            return
+        
+        # ⭐ Добавляем пользователя в клан ⭐
+        clan["members"][user_id] = {
+            "joined_at": int(time.time()),
+            "role": "member"
+        }
+        data["user_clan"][user_id] = clan_name
+        user_data["clan_invite_pending"] = None
+        save_data(data)
+        
+        # ⭐ Уведомляем игрока ⭐
+        try:
+            await query.edit_message_text(
+                f"🎉 <b>Вы успешно вступили в клан {html.escape(clan_name)}!</b>\n\n"
+                f"Используйте кнопку «📋 Мой клан» для просмотра участников.",
+                parse_mode="HTML"
+            )
+        except:
+            pass
+        
+        # ⭐ Уведомляем лидера ⭐
+        try:
+            await context.bot.send_message(
+                chat_id=inviter_id,
+                text=(
+                    f"✅ Игрок {html.escape(user_data.get('first_name', 'Новый участник'))} "
+                    f"принял приглашение в клан <b>{html.escape(clan_name)}</b>!",
+                    parse_mode="HTML"
+                )
+            )
+        except:
+            pass
+        
+        await query.answer("✅ Приглашение принято!", show_alert=False)
+        logger.info(f"Игрок {user_id} принял приглашение в клан {clan_name}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка accept_clan_invite_callback: {e}")
+        await query.answer("❌ Произошла ошибка", show_alert=True)
+
+async def decline_clan_invite_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработчик inline-кнопки 'Отказаться' для приглашения в клан."""
+    try:
+        query = update.callback_query
+        user_id = str(query.from_user.id)
+        data = load_data()
+        user_data = data["users"].get(user_id, {})
+        
+        invite = user_data.get("clan_invite_pending")
+        if not invite:
+            await query.answer("❌ У вас нет ожидающих приглашений!", show_alert=True)
+            return
+        
+        clan_name = invite.get("clan_name")
+        inviter_id = invite.get("inviter_id")
+        
+        # ⭐ Очищаем приглашение ⭐
+        user_data["clan_invite_pending"] = None
+        save_data(data)
+        
+        # ⭐ Уведомляем игрока ⭐
+        try:
+            await query.edit_message_text(
+                f"❌ <b>Вы отказались от приглашения в клан {html.escape(clan_name)}.</b>",
+                parse_mode="HTML"
+            )
+        except:
+            pass
+        
+        # ⭐ Уведомляем лидера ⭐
+        try:
+            await context.bot.send_message(
+                chat_id=inviter_id,
+                text=(
+                    f"❌ Игрок {html.escape(user_data.get('first_name', 'Игрок'))} "
+                    f"отклонил приглашение в клан <b>{html.escape(clan_name)}</b>.",
+                    parse_mode="HTML"
+                )
+            )
+        except:
+            pass
+        
+        await query.answer("❌ Приглашение отклонено", show_alert=False)
+        logger.info(f"Игрок {user_id} отказался от приглашения в клан {clan_name}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка decline_clan_invite_callback: {e}")
+        await query.answer("❌ Произошла ошибка", show_alert=True)
         
 async def join_clan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Присоединение к клану по ID."""
@@ -6366,12 +6506,15 @@ async def accept_clan_invite(update: Update, context: ContextTypes.DEFAULT_TYPE)
         user_data["clan_invite_pending"] = None
         save_data(data)
 
-        # Уведомляем лидера
+        # ⭐ Уведомляем лидера (с экранированием) ⭐
         try:
             await context.bot.send_message(
                 chat_id=inviter_id,
-                text=f"✅ Игрок {user_data.get('first_name', 'Новый участник')} принял приглашение в клан **{clan_name}**!",
-                parse_mode="Markdown"
+                text=(
+                    f"✅ Игрок {html.escape(user_data.get('first_name', 'Новый участник'))} "
+                    f"принял приглашение в клан <b>{html.escape(clan_name)}</b>!",
+                    parse_mode="HTML"
+                )
             )
         except:
             pass
@@ -11369,6 +11512,8 @@ def main() -> None:
             CallbackQueryHandler(archive_search_callback, pattern=r"^archive_search_(prev|next|info|cancel).*"),
             CallbackQueryHandler(open_superman_heroes_box, pattern=r"^shop_open_superman_heroes$"),
             CallbackQueryHandler(open_superman_villain_box, pattern=r"^shop_open_superman_villain$"),
+            CallbackQueryHandler(accept_clan_invite_callback, pattern=r"^accept_clan_invite$"),
+            CallbackQueryHandler(decline_clan_invite_callback, pattern=r"^decline_clan_invite$"),
         ]
 
         for handler in handlers:
