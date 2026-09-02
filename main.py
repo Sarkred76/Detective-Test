@@ -5873,8 +5873,8 @@ async def decline_clan_invite_callback(update: Update, context: ContextTypes.DEF
                 text=(
                     f"❌ Игрок {html.escape(user_data.get('first_name', 'Игрок'))} "
                     f"отклонил приглашение в клан <b>{html.escape(clan_name)}</b>.",
-                    parse_mode="HTML"
                 )
+                parse_mode="HTML"
             )
         except:
             pass
