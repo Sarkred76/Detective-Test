@@ -3004,6 +3004,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await kick_clan_member_start(update, context)
             return
 
+        if text == "👑 Передать лидерство":
+            await transfer_leadership_start(update, context)
+            return
+
         if text == "🖼 Установить аватарку клана":  # ⭐ НОВОЕ
             await set_clan_avatar_start(update, context)
             return
@@ -3030,6 +3034,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
             if user_step == "clan_kick_enter_username":
                 await process_kick_clan_member(update, context)
+                return
+
+            if user_step == "clan_transfer_enter_username":
+                await process_transfer_leadership(update, context)
                 return
 
             if user_step == "clan_edit_description":
@@ -6180,6 +6188,7 @@ async def my_clan_view(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 [KeyboardButton("✏️ Описание клана")],
                 [KeyboardButton("🖼 Установить аватарку клана")],  # ⭐ НОВОЕ
                 [KeyboardButton("🚫 Выгнать участника")],
+                [KeyboardButton("👑 Передать лидерство")],
                 [KeyboardButton("🚪 Покинуть клан")],
                 [KeyboardButton("🔙 Назад в кланы")]
             ]
@@ -11611,6 +11620,204 @@ def kick_clan_member(leader_id: str, target_user_id: str, data: Dict) -> tuple[b
     logger.info(f"Глава {leader_id} выгнал игрока {target_user_id} из клана {clan_name}")
     
     return True, f"Игрок **{target_name}** выгнан из клана **{clan_name}**."
+
+async def transfer_leadership_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Запрашивает @никнейм игрока для передачи ему лидерства."""
+    try:
+        user_id = str(update.effective_user.id)
+        data = load_data()
+        clan_id = get_user_clan(user_id, data)
+        
+        if not clan_id:
+            await update.message.reply_text("❌ Вы не состоите в клане!")
+            return
+        
+        clan = get_clan_data(clan_id, data)
+        if not clan:
+            await update.message.reply_text("❌ Клан не найден!")
+            return
+        
+        if not is_clan_leader(user_id, clan_id, data):
+            await update.message.reply_text("❌ Только глава клана может передавать лидерство!")
+            return
+        
+        # ⭐ Проверяем, есть ли другие участники ⭐
+        members_count = len(clan.get("members", {}))
+        if members_count <= 1:
+            await update.message.reply_text(
+                "⚠️ В клане нет участников, которым можно передать лидерство.\n\n"
+                "💡 Вы единственный участник клана."
+            )
+            return
+        
+        context.user_data[user_id] = {"step": "clan_transfer_enter_username"}
+        
+        keyboard = [[KeyboardButton("❌ Отмена")]]
+        await update.message.reply_text(
+            "👑 <b>Передача лидерства</b>\n\n"
+            "✏️ Введите @никнейм игрока, которому вы хотите передать лидерство:\n"
+            "Пример: `@username`\n\n"
+            "⚠️ <b>Внимание:</b>\n"
+            "• Передача лидерства — окончательное действие\n"
+            "• Новый глава получит все права управления кланом\n"
+            "• Вы станете обычным участником клана\n"
+            "• Вы не сможете передать лидерство самому себе",
+            reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logger.error(f"Ошибка в transfer_leadership_start: {e}")
+        await update.message.reply_text("❌ Ошибка при открытии меню передачи лидерства")
+
+async def process_transfer_leadership(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обрабатывает ввод @никнейма для передачи лидерства."""
+    try:
+        user_id = str(update.effective_user.id)
+        text = update.message.text.strip()
+        data = load_data()
+        
+        # ⭐ Отмена ⭐
+        if text == "❌ Отмена":
+            if user_id in context.user_data:
+                del context.user_data[user_id]
+            keyboard = [[KeyboardButton("🔙 Назад в кланы")]]
+            await update.message.reply_text(
+                "❌ Передача лидерства отменена.",
+                reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+            )
+            return
+        
+        # ⭐ Проверяем формат ⭐
+        if not text.startswith("@"):
+            await update.message.reply_text(
+                "❌ Никнейм должен начинаться с @!\n"
+                "Повторите ввод:"
+            )
+            return
+        
+        target_username = text[1:].strip().lower()
+        
+        # ⭐ Ищем игрока по username ⭐
+        target_user_id = None
+        for uid, udata in data["users"].items():
+            if udata.get("username", "").lower() == target_username:
+                target_user_id = uid
+                break
+        
+        if not target_user_id:
+            await update.message.reply_text(
+                f"❌ Игрок с никнеймом @{target_username} не найден!\n"
+                f"Повторите ввод или нажмите ❌ Отмена"
+            )
+            return
+        
+        # ⭐ Нельзя передать лидерство самому себе ⭐
+        if target_user_id == user_id:
+            await update.message.reply_text(
+                "❌ Вы не можете передать лидерство самому себе!\n"
+                "Укажите другого участника клана."
+            )
+            return
+        
+        # ⭐ Выполняем передачу лидерства ⭐
+        success, message = transfer_leadership(user_id, target_user_id, data)
+        
+        if success:
+            save_data(data)
+            
+            # ⭐ Уведомляем нового главу ⭐
+            try:
+                clan_id = get_user_clan(user_id, data)
+                clan = get_clan_data(clan_id, data) if clan_id else None
+                clan_name = clan.get("name", "неизвестный клан") if clan else "удалённый клан"
+                
+                target_user_data = data["users"].get(target_user_id, {})
+                
+                await context.bot.send_message(
+                    chat_id=int(target_user_id),
+                    text=(
+                        f"👑 <b>Вам передали лидерство в клане!</b>\n\n"
+                        f"🏰 Клан: {html.escape(clan_name)}\n"
+                        f"🎉 Теперь вы — глава клана!\n\n"
+                        f"💡 Используйте кнопку «📋 Мой клан» для управления."
+                    ),
+                    parse_mode="HTML"
+                )
+            except Exception as notify_error:
+                logger.warning(f"Не удалось уведомить нового главу {target_user_id}: {notify_error}")
+        else:
+            save_data(data)
+        
+        # ⭐ Очищаем состояние ⭐
+        if user_id in context.user_data:
+            del context.user_data[user_id]
+        
+        keyboard = [[KeyboardButton("🔙 Назад в кланы")]]
+        await update.message.reply_text(
+            f"{'✅' if success else '❌'} {message}",
+            reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.error(f"Ошибка в process_transfer_leadership: {e}")
+        await update.message.reply_text("❌ Ошибка при передаче лидерства")
+
+def transfer_leadership(current_leader_id: str, new_leader_id: str, data: Dict) -> tuple[bool, str]:
+    """Передаёт лидерство в клане другому участнику (только для текущего главы)."""
+    # ⭐ Проверяем, что текущий лидер в клане ⭐
+    clan_identifier = get_user_clan(current_leader_id, data)
+    if not clan_identifier:
+        return False, "Вы не состоите в клане!"
+    
+    clan = get_clan_data(clan_identifier, data)
+    if not clan:
+        return False, "Ошибка: клан не найден!"
+    
+    # ⭐ Проверяем, что вызывающий — текущий глава ⭐
+    if current_leader_id != clan.get("leader_id"):
+        return False, "Только текущий глава клана может передавать лидерство!"
+    
+    # ⭐ Проверяем, что цель — в этом же клане ⭐
+    target_clan_id = get_user_clan(new_leader_id, data)
+    if target_clan_id != clan_identifier:
+        target_user_data = data["users"].get(new_leader_id, {})
+        target_name = target_user_data.get("first_name", "Игрок")
+        return False, f"Игрок {target_name} не состоит в вашем клане!"
+    
+    # ⭐ Нельзя передать лидерство самому себе ⭐
+    if new_leader_id == current_leader_id:
+        return False, "Вы не можете передать лидерство самому себе!"
+    
+    # ⭐ Получаем имена ⭐
+    new_leader_data = data["users"].get(new_leader_id, {})
+    new_leader_name = new_leader_data.get("first_name", "Игрок")
+    if new_leader_data.get("last_name"):
+        new_leader_name += f" {new_leader_data['last_name']}"
+    
+    clan_name = clan.get("name", "Клан")
+    
+    # ⭐ Обновляем роли участников ⭐
+    # Старый лидер становится обычным участником
+    if current_leader_id in clan["members"]:
+        clan["members"][current_leader_id]["role"] = "member"
+    
+    # Новый участник становится лидером
+    if new_leader_id in clan["members"]:
+        clan["members"][new_leader_id]["role"] = "leader"
+    
+    # ⭐ Обновляем ID лидера в клане ⭐
+    clan["leader_id"] = new_leader_id
+    
+    logger.info(
+        f"Игрок {current_leader_id} передал лидерство в клане {clan_name} "
+        f"игроку {new_leader_id} ({new_leader_name})"
+    )
+    
+    return True, (
+        f"👑 Лидерство в клане **{clan_name}** передано!\n\n"
+        f"🆕 Новый глава: **{new_leader_name}**\n"
+        f"👤 Вы теперь обычный участник клана."
+    )
 
 # ===== ЗАПУСК БОТА =====
 
