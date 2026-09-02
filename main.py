@@ -5824,11 +5824,8 @@ async def accept_clan_invite_callback(update: Update, context: ContextTypes.DEFA
         try:
             await context.bot.send_message(
                 chat_id=inviter_id,
-                text=(
-                    f"✅ Игрок {html.escape(user_data.get('first_name', 'Новый участник'))} "
-                    f"принял приглашение в клан <b>{html.escape(clan_name)}</b>!",
+                text=f"✅ Игрок {user_data.get('first_name', 'Новый участник')} принял приглашение в клан **{clan_name}**!",
                     parse_mode="HTML"
-                )
             )
         except:
             pass
