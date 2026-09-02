@@ -701,9 +701,8 @@ def generate_card_caption(
     if show_bonus and user_data is not None:
         bonus = RARITY_BONUSES.get(card["rarity"], {"cents": 0, "points": 0})
         caption += f"\n\n💰 +{bonus['cents']} бэт-коинов\n💥 +{bonus['points']} очков репутации"
-
-    if super_coins_earned > 0:
-        caption += f" | 🏰 +{super_coins_earned} супер-коинов в клан"
+        if super_coins_earned > 0:
+            caption += f" | 🏰 +{super_coins_earned} супер-коинов"
         
     # ⭐ ДОБАВЛЯЕМ КОЛИЧЕСТВО, ЕСЛИ ЕСТЬ ДУБЛИКАТЫ ⭐
     if count > 1:
