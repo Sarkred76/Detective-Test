@@ -11464,8 +11464,7 @@ async def kick_clan_member_start(update: Update, context: ContextTypes.DEFAULT_T
         keyboard = [[KeyboardButton("❌ Отмена")]]
         await update.message.reply_text(
             "✏️ Введите @никнейм игрока для выгона из клана:\n"
-            "Пример: `@username`\n\n"
-            "⚠️ <b>Внимание:</b> Вы не сможете выгнать самого себя.",
+            "Пример: `@username`\n\n",
             reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
             parse_mode="Markdown"
         )
