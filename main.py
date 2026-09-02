@@ -5733,6 +5733,9 @@ async def invite_player_to_clan(
     data["users"][target_user_id] = target_user_data
     
     # ⭐ Уведомляем целевого пользователя с inline-кнопками ⭐
+    # ⭐ ИСПРАВЛЕНИЕ: Загружаем данные приглашающего ⭐
+    inviter_data = data["users"].get(inviter_id, {})
+
     try:
         keyboard = [
             [
