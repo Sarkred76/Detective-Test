@@ -687,13 +687,12 @@ def generate_card_caption(
     if user_data is None:
         caption = f"{card['title']}"
     else:
-        caption = f"🔍 У Вас новый\n подозреваемый!\n\n{html.escape(card['title'])}"
+        caption = f"🔍 У Вас новый подозреваемый!\n\n{html.escape(card['title'])}"
 
     caption += f"\nРедкость: {card['rarity']}"
     
     # ⭐ НОВОЕ: ЦИТАТА ЧЕРЕЗ BLOCKQUOTE (HTML-тег) ⭐
     if card.get("catchphrase"):
-        # ⭐ Telegram HTML поддерживает обычные \n для переноса строк ⭐
         escaped_phrase = html.escape(card['catchphrase'])
         caption += f"\n<blockquote><i>{escaped_phrase}</i></blockquote>"
         
@@ -701,10 +700,24 @@ def generate_card_caption(
     if show_bonus and user_data is not None:
         bonus = RARITY_BONUSES.get(card["rarity"], {"cents": 0, "points": 0})
         caption += f"\n\n💰 +{bonus['cents']} бэт-коинов"
-        if super_coins_earned > 0:
-            caption += f"\n🪙 +{super_coins_earned} супер-коинов"
-        caption += f"\n💥 +{bonus['points']} очков репутации"
         
+        # ⭐ НОВОЕ: Правильное склонение слова "супер-коин" ⭐
+        if super_coins_earned > 0:
+            n = super_coins_earned % 100
+            n1 = n % 10
+            
+            if n > 10 and n < 20:
+                coin_word = "супер-коинов"
+            elif n1 > 1 and n1 < 5:
+                coin_word = "супер-коина"
+            elif n1 == 1:
+                coin_word = "супер-коин"
+            else:
+                coin_word = "супер-коинов"
+                
+            caption += f"\n🪙 +{super_coins_earned} {coin_word}"
+            
+        caption += f"\n💥 +{bonus['points']} очков репутации"
         
     # ⭐ ДОБАВЛЯЕМ КОЛИЧЕСТВО, ЕСЛИ ЕСТЬ ДУБЛИКАТЫ ⭐
     if count > 1:
