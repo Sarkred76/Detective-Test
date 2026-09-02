@@ -3020,7 +3020,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await submenu(update, context)
             return
 
-        elif text == "🎩 Ивент":
+        elif text == "🧪 Ивент":
             await event_menu(update, context)
             return
 
@@ -8660,7 +8660,7 @@ async def submenu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             [KeyboardButton("👤 Личное дело")],
             [KeyboardButton("📜 Квесты"), KeyboardButton("🏰 Кланы")],
             [KeyboardButton("🛍️ Магазин"), KeyboardButton("🍺 Бар")],
-            [KeyboardButton("🎩 Ивент")],
+            [KeyboardButton("🧪 Ивент")],
             [KeyboardButton("🔙 Назад в главное меню")],
         ]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -10797,7 +10797,7 @@ async def event_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             [KeyboardButton("👤 Личное дело")],
             [KeyboardButton("📜 Квесты"), KeyboardButton("🏰 Кланы")],
             [KeyboardButton("🛍️ Магазин"), KeyboardButton("🍺 Бар")],
-            [KeyboardButton("🎩 Ивент")],
+            [KeyboardButton("🧪 Ивент")],
             [KeyboardButton("🔙 Назад в главное меню")],
         ]
             await update.message.reply_text(
@@ -10911,7 +10911,7 @@ async def process_interrogation_answer(update: Update, context: ContextTypes.DEF
         # ⭐ Игнорируем основные кнопки меню ⭐
         main_buttons = [
             "🔍 Получить досье", "📁 Мой архив", "🍺 Бар", "🎰 Казино",
-            "🏰 Клан", "🛒 Магазин", "🎩 Ивент", "📋 Меню",
+            "🏰 Клан", "🛒 Магазин", "🧪 Ивент", "📋 Меню",
             "👤 Личное дело", "📜 Квесты", "🏰 Кланы", "🛍️ Магазин"
         ]
         if text in main_buttons:
@@ -10982,7 +10982,7 @@ async def process_interrogation_answer(update: Update, context: ContextTypes.DEF
                     [KeyboardButton("👤 Личное дело")],
                     [KeyboardButton("📜 Квесты"), KeyboardButton("🏰 Кланы")],
                     [KeyboardButton("🛍️ Магазин"), KeyboardButton("🍺 Бар")],
-                    [KeyboardButton("🎩 Ивент")],
+                    [KeyboardButton("🧪 Ивент")],
                 ]
             
             await update.message.reply_text(
@@ -11127,7 +11127,7 @@ async def finish_interrogation(update: Update, context: ContextTypes.DEFAULT_TYP
             [KeyboardButton("👤 Личное дело")],
             [KeyboardButton("📜 Квесты"), KeyboardButton("🏰 Кланы")],
             [KeyboardButton("🛍️ Магазин"), KeyboardButton("🍺 Бар")],
-            [KeyboardButton("🎩 Ивент")],
+            [KeyboardButton("🧪 Ивент")],
             [KeyboardButton("🔙 Назад в главное меню")],
         ]
         
