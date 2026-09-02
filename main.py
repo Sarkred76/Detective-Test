@@ -91,7 +91,7 @@ MENU_IMAGE = "https://files.catbox.moe/zj1vl8.jpg"
 QUESTS_IMAGE = "https://files.catbox.moe/0k82du.jpg"
 
 # ===== ИВЕНТ: ДОПРОС ПУГАЛО =====
-EVENT_REWARD_CARD_ID = 193  # ⭐ ЗАМЕНИТЕ НА ID КАРТЫ-НАГРАДЫ
+EVENT_REWARD_CARD_ID = 1  # ⭐ ЗАМЕНИТЕ НА ID КАРТЫ-НАГРАДЫ
 
 # Минимальное количество правильных ответов для получения награды
 EVENT_MIN_CORRECT = 6
@@ -10801,7 +10801,7 @@ async def event_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             [KeyboardButton("🔙 Назад в главное меню")],
         ]
             await update.message.reply_text(
-                "🎩 <b>Ивент</b>\n\n"
+                "🧪 <b>Ивент</b>\n\n"
                 "🔒 <b>Следующего подозреваемого приведут через неделю!</b>\n\n"
                 "Ожидайте новых расследований...",
                 reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
