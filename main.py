@@ -8637,27 +8637,32 @@ async def top_clans(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             message_text += f" 👥 Участников: {clan['members']}\n"
             message_text += f" 💎 Репутация: {clan['reputation']}\n\n"
         
-        # ⭐ ИСПРАВЛЕНИЕ: Используем функцию get_user_clan для актуального ID клана ⭐
+        # ⭐ ИСПРАВЛЕНИЕ: Используем get_user_clan для получения ID клана пользователя ⭐
         user_id = str(update.effective_user.id)
-        user_clan_id = get_clan_data(clan_id, data)
-        
-        if user_clan_id:
+        user_clan_identifier = get_user_clan(user_id, data)
+
+        if user_clan_identifier:
             user_clan_rank = None
             for rank, clan in enumerate(clan_scores, 1):
-                if clan["id"] == user_clan_id:
+                # ⭐ Сравниваем и по ID, и по названию (для совместимости со старыми данными) ⭐
+                if clan["id"] == user_clan_identifier or clan["name"] == user_clan_identifier:
                     user_clan_rank = rank
                     break
-            
+    
             if not user_clan_rank:
                 user_clan_rank = len(clan_scores) + 1
-            
+    
             message_text += "─" * 30 + "\n"
             if user_clan_rank <= 10:
                 message_text += f"✅ **Ваш клан в топе! Место: {user_clan_rank}**\n"
             else:
                 message_text += f"📍 **Ваш клан вне топ-10. Место: {user_clan_rank}**\n"
-            
-            current_clan_data = next((c for c in clan_scores if c["id"] == user_clan_id), None)
+    
+            # ⭐ ИСПРАВЛЕНИЕ: Поиск с учётом обоих идентификаторов ⭐
+            current_clan_data = next(
+                (c for c in clan_scores if c["id"] == user_clan_identifier or c["name"] == user_clan_identifier),
+                None
+            )
             if current_clan_data:
                 message_text += f"💎 Репутация вашего клана: {current_clan_data['reputation']}"
         
