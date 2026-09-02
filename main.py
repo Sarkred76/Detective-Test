@@ -2578,12 +2578,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         user_id = str(update.effective_user.id)
         text = update.message.text if update.message else None
 
-        # ⭐ НОВОЕ: Обновляем данные игрока, если они изменились ⭐
-        if user_data:
-            if update_user_info(user_id, update.effective_user, data):
-                save_data(data)
-                logger.debug(f"Обновлены данные игрока {user_id}: @{update.effective_user.username}")
-
         # ⭐ ОБРАБОТКА ФОТО ДЛЯ УСТАНОВКИ АВАТАРКИ КЛАНА ⭐
         if update.message.photo and user_id in context.user_data:
             if context.user_data[user_id].get("step") == "clan_set_avatar":
@@ -2681,6 +2675,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         data = load_data()
         user_data = data["users"].get(user_id)
         text = update.message.text
+
+        # ⭐ НОВОЕ: Обновляем данные игрока, если они изменились ⭐
+        if user_data:
+            if update_user_info(user_id, update.effective_user, data):
+                save_data(data)
+                logger.debug(f"Обновлены данные игрока {user_id}: @{update.effective_user.username}")
 
         # ⭐ ПРОВЕРКА ИСТЕЧЕНИЯ БЭТ-ПАССА ⭐
         if user_data and user_data.get("has_batpass", False):
