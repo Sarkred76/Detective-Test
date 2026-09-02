@@ -8639,7 +8639,7 @@ async def top_clans(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         
         # ⭐ ИСПРАВЛЕНИЕ: Используем функцию get_user_clan для актуального ID клана ⭐
         user_id = str(update.effective_user.id)
-        user_clan_id = get_user_clan(user_id, data)
+        user_clan_id = get_clan_data(clan_id, data)
         
         if user_clan_id:
             user_clan_rank = None
