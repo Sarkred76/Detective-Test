@@ -3135,6 +3135,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             free_rolls = user_data.get("free_rolls", 0)
             use_free_roll = False
 
+            super_coins_earned = 0
             # ⭐ АДМИНЫ ПРОПУСКАЮТ КУЛДАУН ⭐
             if is_super_admin:
                 # Админы всегда могут получить карту (без кулдауна)
@@ -3184,8 +3185,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             user_data["season_points"] += bonus["points"]
             user_data["cents"] += bonus["cents"]
             user_data["cards"].append(card["id"])
+            
             # ⭐ НОВОЕ: Начисление супер-коинов в клан ⭐
-            super_coins_earned = 0
             user_clan_id = get_user_clan(user_id, data)
             if user_clan_id:
                 clan_data = data["clans"].get(user_clan_id)
