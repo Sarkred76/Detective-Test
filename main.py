@@ -10916,7 +10916,7 @@ async def process_interrogation_answer(update: Update, context: ContextTypes.DEF
         ]
         if text in main_buttons:
             await update.message.reply_text(
-                "🎩 <b>Вы находитесь в режиме допроса!</b>\n\n"
+                "🧪 <b>Вы находитесь в режиме допроса!</b>\n\n"
                 "Пожалуйста, выберите один из вариантов ответа, чтобы продолжить расследование.",
                 parse_mode="HTML"
             )
@@ -11004,7 +11004,7 @@ async def process_interrogation_answer(update: Update, context: ContextTypes.DEF
             response_text = (
                 f"👤 <b>Вы:</b>\n"
                 f"<i>{text}</i>\n\n"
-                f"🎩 <b>Безумный Шляпник:</b>\n"
+                f"🧪 <b>Пугало:</b>\n"
                 f"<i>{wrong_response}</i>\n\n"
                 f"💬 <b>Выберите вариант ответа:</b>"
             )
