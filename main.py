@@ -6020,17 +6020,33 @@ async def my_clan_view(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
         
-        # ⭐ ОТПРАВКА С АВАТАРКОЙ КЛАНА ⭐
+        # ⭐ ОТПРАВКА С АВАТАРКОЙ КЛАНА (с fallback) ⭐
         clan_avatar = clan.get("clan_avatar")
-        
         if clan_avatar:
-            # Если есть аватарка клана, отправляем фото
-            await update.message.reply_photo(
-                photo=clan_avatar,
-                caption=message_text,
-                reply_markup=reply_markup,
-                parse_mode="HTML"
-            )
+            try:
+                # Если есть аватарка клана, отправляем фото
+                await update.message.reply_photo(
+                    photo=clan_avatar,
+                    caption=message_text,
+                    reply_markup=reply_markup,
+                    parse_mode="HTML"
+                )
+            except Exception as photo_error:
+                # ⭐ FALLBACK: Если фото не удалось отправить — отправляем текст ⭐
+                error_str = str(photo_error)
+                if "Wrong file identifier" in error_str or "http url" in error_str.lower():
+                    logger.warning(
+                        f"Аватарка клана {clan.get('name')} невалидна ({clan_avatar}). "
+                        f"Отправляю текстовое сообщение."
+                    )
+                    await update.message.reply_text(
+                        message_text,
+                        reply_markup=reply_markup,
+                        parse_mode="HTML"
+                    )
+                else:
+                    # Другая ошибка — пробрасываем дальше
+                    raise photo_error
         else:
             # Если аватарки нет, отправляем текст
             await update.message.reply_text(
@@ -6038,9 +6054,23 @@ async def my_clan_view(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 reply_markup=reply_markup,
                 parse_mode="HTML"
             )
-    except Exception as e:
-        logger.error(f"Ошибка в my_clan_view: {e}")
-        await update.message.reply_text("❌ Ошибка при показе информации о клане")
+    except Exception as photo_error:
+        error_str = str(photo_error)
+        if "Wrong file identifier" in error_str or "http url" in error_str.lower():
+            logger.warning(
+                f"Аватарка клана {clan.get('name')} невалидна. Сбрасываю."
+            )
+            # ⭐ НОВОЕ: Сбрасываем невалидную аватарку ⭐
+            clan["clan_avatar"] = None
+            save_data(data)
+        
+            await update.message.reply_text(
+                message_text,
+                reply_markup=reply_markup,
+                parse_mode="HTML"
+            )
+        else:
+            raise photo_error
 
 async def set_clan_avatar_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Начинает процесс установки аватарки клана."""
