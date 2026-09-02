@@ -3000,6 +3000,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await edit_clan_description_start(update, context)
             return
 
+        if text == "🚫 Выгнать участника":
+            await kick_clan_member_start(update, context)
+            return
+
         if text == "🖼 Установить аватарку клана":  # ⭐ НОВОЕ
             await set_clan_avatar_start(update, context)
             return
@@ -3022,6 +3026,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     
             if user_step == "clan_invite_enter_username":
                 await process_clan_invite(update, context)
+                return
+
+            if user_step == "clan_kick_enter_username":
+                await process_kick_clan_member(update, context)
                 return
 
             if user_step == "clan_edit_description":
@@ -6171,6 +6179,7 @@ async def my_clan_view(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 [KeyboardButton("📨 Пригласить игрока")],
                 [KeyboardButton("✏️ Описание клана")],
                 [KeyboardButton("🖼 Установить аватарку клана")],  # ⭐ НОВОЕ
+                [KeyboardButton("🚫 Выгнать участника")],
                 [KeyboardButton("🚪 Покинуть клан")],
                 [KeyboardButton("🔙 Назад в кланы")]
             ]
@@ -11420,6 +11429,189 @@ def update_user_info(user_id: str, telegram_user, data: Dict) -> bool:
         changed = True
     
     return changed
+
+async def kick_clan_member_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Запрашивает @никнейм игрока для выгона из клана."""
+    try:
+        user_id = str(update.effective_user.id)
+        data = load_data()
+        clan_id = get_user_clan(user_id, data)
+        
+        if not clan_id:
+            await update.message.reply_text("❌ Вы не состоите в клане!")
+            return
+        
+        clan = get_clan_data(clan_id, data)
+        if not clan:
+            await update.message.reply_text("❌ Клан не найден!")
+            return
+        
+        if not is_clan_leader(user_id, clan_id, data):
+            await update.message.reply_text("❌ Только глава клана может выгонять участников!")
+            return
+        
+        # ⭐ Проверяем, есть ли другие участники ⭐
+        members_count = len(clan.get("members", {}))
+        if members_count <= 1:
+            await update.message.reply_text(
+                "⚠️ В клане нет участников, которых можно выгнать.\n\n"
+                "💡 Вы единственный участник клана."
+            )
+            return
+        
+        context.user_data[user_id] = {"step": "clan_kick_enter_username"}
+        
+        keyboard = [[KeyboardButton("❌ Отмена")]]
+        await update.message.reply_text(
+            "✏️ Введите @никнейм игрока для выгона из клана:\n"
+            "Пример: `@username`\n\n"
+            "⚠️ <b>Внимание:</b> Вы не сможете выгнать самого себя.",
+            reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.error(f"Ошибка в kick_clan_member_start: {e}")
+        await update.message.reply_text("❌ Ошибка при открытии меню выгона")
+
+async def process_kick_clan_member(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обрабатывает ввод @никнейма для выгона игрока из клана."""
+    try:
+        user_id = str(update.effective_user.id)
+        text = update.message.text.strip()
+        data = load_data()
+        
+        # ⭐ Отмена ⭐
+        if text == "❌ Отмена":
+            if user_id in context.user_data:
+                del context.user_data[user_id]
+            keyboard = [[KeyboardButton("🔙 Назад в кланы")]]
+            await update.message.reply_text(
+                "❌ Выгон участника отменён.",
+                reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+            )
+            return
+        
+        # ⭐ Проверяем формат ⭐
+        if not text.startswith("@"):
+            await update.message.reply_text(
+                "❌ Никнейм должен начинаться с @!\n"
+                "Повторите ввод:"
+            )
+            return
+        
+        target_username = text[1:].strip().lower()
+        
+        # ⭐ Ищем игрока по username ⭐
+        target_user_id = None
+        for uid, udata in data["users"].items():
+            if udata.get("username", "").lower() == target_username:
+                target_user_id = uid
+                break
+        
+        if not target_user_id:
+            await update.message.reply_text(
+                f"❌ Игрок с никнеймом @{target_username} не найден!\n"
+                f"Повторите ввод или нажмите ❌ Отмена"
+            )
+            return
+        
+        # ⭐ Нельзя выгнать самого себя ⭐
+        if target_user_id == user_id:
+            await update.message.reply_text(
+                "❌ Вы не можете выгнать самого себя!\n"
+                "Если хотите покинуть клан, используйте кнопку «🚪 Покинуть клан»."
+            )
+            if user_id in context.user_data:
+                del context.user_data[user_id]
+            return
+        
+        # ⭐ Выполняем выгон ⭐
+        success, message = kick_clan_member(user_id, target_user_id, data)
+        
+        if success:
+            save_data(data)
+            
+            # ⭐ Уведомляем выгнанного игрока ⭐
+            try:
+                clan_id = get_user_clan(user_id, data)
+                clan = get_clan_data(clan_id, data) if clan_id else None
+                clan_name = clan.get("name", "неизвестный клан") if clan else "удалённый клан"
+                
+                await context.bot.send_message(
+                    chat_id=int(target_user_id),
+                    text=(
+                        f"🚫 <b>Вас выгнали из клана!</b>\n\n"
+                        f"🏰 Клан: {html.escape(clan_name)}\n"
+                        f"👑 Решение главы клана — окончательное.\n\n"
+                        f"💡 Вы можете вступить в другой клан по приглашению главы."
+                    ),
+                    parse_mode="HTML"
+                )
+            except Exception as notify_error:
+                logger.warning(f"Не удалось уведомить выгнанного игрока {target_user_id}: {notify_error}")
+        else:
+            # ⭐ Даже при ошибке сохраняем (на случай изменений) ⭐
+            save_data(data)
+        
+        # ⭐ Очищаем состояние ⭐
+        if user_id in context.user_data:
+            del context.user_data[user_id]
+        
+        keyboard = [[KeyboardButton("🔙 Назад в кланы")]]
+        await update.message.reply_text(
+            f"{'✅' if success else '❌'} {message}",
+            reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.error(f"Ошибка в process_kick_clan_member: {e}")
+        await update.message.reply_text("❌ Ошибка при выгоне участника")
+
+def kick_clan_member(leader_id: str, target_user_id: str, data: Dict) -> tuple[bool, str]:
+    """Выгоняет участника из клана (только для главы клана)."""
+    # ⭐ Проверяем, что глава в клане ⭐
+    clan_identifier = get_user_clan(leader_id, data)
+    if not clan_identifier:
+        return False, "Вы не состоите в клане!"
+    
+    clan = get_clan_data(clan_identifier, data)
+    if not clan:
+        return False, "Ошибка: клан не найден!"
+    
+    # ⭐ Проверяем, что вызывающий — глава ⭐
+    if leader_id != clan.get("leader_id"):
+        return False, "Только глава клана может выгонять участников!"
+    
+    # ⭐ Проверяем, что цель — в этом же клане ⭐
+    target_clan_id = get_user_clan(target_user_id, data)
+    if target_clan_id != clan_identifier:
+        target_user_data = data["users"].get(target_user_id, {})
+        target_name = target_user_data.get("first_name", "Игрок")
+        return False, f"Игрок {target_name} не состоит в вашем клане!"
+    
+    # ⭐ Нельзя выгнать самого себя ⭐
+    if target_user_id == leader_id:
+        return False, "Вы не можете выгнать самого себя!"
+    
+    # ⭐ Получаем имя цели ⭐
+    target_user_data = data["users"].get(target_user_id, {})
+    target_name = target_user_data.get("first_name", "Игрок")
+    if target_user_data.get("last_name"):
+        target_name += f" {target_user_data['last_name']}"
+    
+    clan_name = clan.get("name", "Клан")
+    
+    # ⭐ Удаляем участника из клана ⭐
+    if target_user_id in clan["members"]:
+        del clan["members"][target_user_id]
+    
+    # ⭐ Удаляем привязку пользователя к клану ⭐
+    if target_user_id in data.get("user_clan", {}):
+        del data["user_clan"][target_user_id]
+    
+    logger.info(f"Глава {leader_id} выгнал игрока {target_user_id} из клана {clan_name}")
+    
+    return True, f"Игрок **{target_name}** выгнан из клана **{clan_name}**."
 
 # ===== ЗАПУСК БОТА =====
 
