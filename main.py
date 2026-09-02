@@ -242,6 +242,19 @@ BURN_REWARDS = {
     "Limited": {"cents": 0, "free_rolls": 15},  # бонус для редкой
 }
 
+# ===== СУПЕР-КОИНЫ (клановая валюта) =====
+SUPER_COIN_REWARDS = {
+    "Common": 1,
+    "Rare": 2,
+    "Rare Team-up": 3,
+    "Epic": 3,
+    "Epic Team-up": 5,
+    "Legendary": 7,
+    "Legendary Team-up": 10,
+    "Highlight": 15,
+    # Limited — 0 (не начисляются)
+}
+
 def get_card_media_value(card: Dict) -> str:
     """Возвращает правильный источник медиа для карты (file_id или URL)."""
     media_source = card.get("media_source", "url")
@@ -443,6 +456,11 @@ def load_data() -> Dict[str, Any]:
             for clan in data.get("clans", {}).values():
                 if "max_members" not in clan:
                     clan["max_members"] = MAX_CLAN_MEMBERS
+
+            # ⭐ НОВОЕ: Миграция супер-коинов для кланов ⭐
+            for clan_id, clan_data in data.get("clans", {}).items():
+                if "super_coins" not in clan_data:
+                    clan_data["super_coins"] = 0
 
             if "user_clan" not in data:
                 data["user_clan"] = {}  # {user_id: clan_name}
@@ -682,6 +700,9 @@ def generate_card_caption(
     if show_bonus and user_data is not None:
         bonus = RARITY_BONUSES.get(card["rarity"], {"cents": 0, "points": 0})
         caption += f"\n\n💰 +{bonus['cents']} бэт-коинов\n💥 +{bonus['points']} очков репутации"
+
+    if super_coins_earned > 0:
+        caption += f" | 🏰 +{super_coins_earned} супер-коинов в клан"
         
     # ⭐ ДОБАВЛЯЕМ КОЛИЧЕСТВО, ЕСЛИ ЕСТЬ ДУБЛИКАТЫ ⭐
     if count > 1:
@@ -3163,6 +3184,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             user_data["season_points"] += bonus["points"]
             user_data["cents"] += bonus["cents"]
             user_data["cards"].append(card["id"])
+            # ⭐ НОВОЕ: Начисление супер-коинов в клан ⭐
+            super_coins_earned = 0
+            user_clan_id = get_user_clan(user_id, data)
+            if user_clan_id:
+                clan_data = data["clans"].get(user_clan_id)
+                if clan_data:
+                    # ⭐ Получаем количество супер-коинов по редкости ⭐
+                    super_coins_amount = SUPER_COIN_REWARDS.get(card["rarity"], 0)
+                    if super_coins_amount > 0:
+                        clan_data["super_coins"] = clan_data.get("super_coins", 0) + super_coins_amount
+                        super_coins_earned = super_coins_amount
+                        logger.info(f"Клан {clan_data.get('name')} получил {super_coins_amount} супер-коинов за карту #{card['id']}")
 
             # ⭐ ОБНОВЛЕНИЕ ВРЕМЕНИ И БЕСПЛАТНЫХ ПОПЫТОК ⭐
             if use_free_roll:
@@ -5964,6 +5997,7 @@ async def my_clan_view(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             f"🏰 <b>Ваш клан: {clan_name_escaped}</b>\n"
             f"{description_text}"
             f"{members_list}\n"
+            f"🪙 Бюджет клана: {clan_data.get('super_coins', 0)} супер-коинов\n\n"
             f"📊 Всего участников: {len(clan['members'])}\n"
             f"📅 Создан: {datetime.datetime.fromtimestamp(clan['created_at']).strftime('%d.%m.%Y')}"
         )
@@ -6356,6 +6390,7 @@ def _create_clan_logic(clan_name: str, user_id: str, data: Dict) -> tuple[bool, 
         "leader_id": user_id,  # ← Добавьте это поле!
         "members": {user_id: {"joined_at": int(time.time()), "role": "leader"}},  # ← dict, не list!
         "max_members": MAX_CLAN_MEMBERS,
+        "super_coins": 0,  # ⭐ НОВОЕ
         "created_at": int(time.time()),
         "description": "",
         "clan_avatar": None,
