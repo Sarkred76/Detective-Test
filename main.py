@@ -6509,9 +6509,9 @@ async def accept_clan_invite(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 chat_id=inviter_id,
                 text=(
                     f"✅ Игрок {html.escape(user_data.get('first_name', 'Новый участник'))} "
-                    f"принял приглашение в клан <b>{html.escape(clan_name)}</b>!",
-                    parse_mode="HTML"
-                )
+                    f"принял приглашение в клан <b>{html.escape(clan_name)}</b>!"
+                ),
+                parse_mode="HTML"
             )
         except:
             pass
