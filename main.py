@@ -2582,7 +2582,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         if user_data:
             if update_user_info(user_id, update.effective_user, data):
                 save_data(data)
-                logger.debug(f"Обновлены данные игрока {user_id}: @{update.effective_user.usern
+                logger.debug(f"Обновлены данные игрока {user_id}: @{update.effective_user.username}")
 
         # ⭐ ОБРАБОТКА ФОТО ДЛЯ УСТАНОВКИ АВАТАРКИ КЛАНА ⭐
         if update.message.photo and user_id in context.user_data:
