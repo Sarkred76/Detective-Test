@@ -5819,7 +5819,7 @@ async def accept_clan_invite_callback(update: Update, context: ContextTypes.DEFA
         # ⭐ Уведомляем игрока ⭐
         try:
             await query.edit_message_text(
-                f"🎉 <b>Вы успешно вступили в клан {html.escape(clan_name)}!</b>\n\n"
+                f"🎉 <b>Вы успешно вступили в клан {html.escape(clan['name'])}!</b>\n\n"
                 f"Используйте кнопку «📋 Мой клан» для просмотра участников.",
                 parse_mode="HTML"
             )
@@ -5830,14 +5830,14 @@ async def accept_clan_invite_callback(update: Update, context: ContextTypes.DEFA
         try:
             await context.bot.send_message(
                 chat_id=inviter_id,
-                text=f"✅ Игрок {user_data.get('first_name', 'Новый участник')} принял приглашение в клан **{clan_name}**!",
+                text=f"✅ Игрок {user_data.get('first_name', 'Новый участник')} принял приглашение в клан **{clan['name']}**!",
                     parse_mode="HTML"
             )
         except:
             pass
         
         await query.answer("✅ Приглашение принято!", show_alert=False)
-        logger.info(f"Игрок {user_id} принял приглашение в клан {clan_name}")
+        logger.info(f"Игрок {user_id} принял приглашение в клан {clan['name']}")
         
     except Exception as e:
         logger.error(f"Ошибка accept_clan_invite_callback: {e}")
@@ -5866,7 +5866,7 @@ async def decline_clan_invite_callback(update: Update, context: ContextTypes.DEF
         # ⭐ Уведомляем игрока ⭐
         try:
             await query.edit_message_text(
-                f"❌ <b>Вы отказались от приглашения в клан {html.escape(clan_name)}.</b>",
+                f"❌ <b>Вы отказались от приглашения в клан {html.escape(clan['name'])}.</b>",
                 parse_mode="HTML"
             )
         except:
@@ -5878,7 +5878,7 @@ async def decline_clan_invite_callback(update: Update, context: ContextTypes.DEF
                 chat_id=inviter_id,
                 text=(
                     f"❌ Игрок {html.escape(user_data.get('first_name', 'Игрок'))} "
-                    f"отклонил приглашение в клан <b>{html.escape(clan_name)}</b>.",
+                    f"отклонил приглашение в клан <b>{html.escape(clan['name'])}</b>.",
                 ),
                 parse_mode="HTML"
             )
@@ -5886,7 +5886,7 @@ async def decline_clan_invite_callback(update: Update, context: ContextTypes.DEF
             pass
         
         await query.answer("❌ Приглашение отклонено", show_alert=False)
-        logger.info(f"Игрок {user_id} отказался от приглашения в клан {clan_name}")
+        logger.info(f"Игрок {user_id} отказался от приглашения в клан {clan['name']}")
         
     except Exception as e:
         logger.error(f"Ошибка decline_clan_invite_callback: {e}")
