@@ -255,6 +255,28 @@ SUPER_COIN_REWARDS = {
     # Limited — 0 (не начисляются)
 }
 
+# ===== МАГАЗИН КЛАНА =====
+CLAN_SHOP_ITEMS = {
+    "epic": {
+        "name": "🎴 Рандомный Epic",
+        "description": "Случайному участнику клана выдаётся случайная Epic-карта",
+        "price": 50,
+        "emoji": "🎴",
+    },
+    "rolls": {
+        "name": "🎲 2 попытки каждому",
+        "description": "Каждому участнику клана выдаётся 2 бесплатные попытки",
+        "price": 70,
+        "emoji": "🎲",
+    },
+    "cents": {
+        "name": "💰 5000 бэт-коинов",
+        "description": "Случайному участнику клана выдаётся 5000 бэт-коинов",
+        "price": 30,
+        "emoji": "💰",
+    },
+}
+
 def get_card_media_value(card: Dict) -> str:
     """Возвращает правильный источник медиа для карты (file_id или URL)."""
     media_source = card.get("media_source", "url")
@@ -3006,6 +3028,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
         if text == "👑 Передать лидерство":
             await transfer_leadership_start(update, context)
+            return
+
+        if text == "🛒 Магазин клана":
+            await clan_shop_open(update, context)
             return
 
         if text == "🖼 Установить аватарку клана":  # ⭐ НОВОЕ
@@ -6189,6 +6215,7 @@ async def my_clan_view(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 [KeyboardButton("🖼 Установить аватарку клана")],  # ⭐ НОВОЕ
                 [KeyboardButton("🚫 Выгнать участника")],
                 [KeyboardButton("👑 Передать лидерство")],
+                [KeyboardButton("🛒 Магазин клана")],
                 [KeyboardButton("🚪 Покинуть клан")],
                 [KeyboardButton("🔙 Назад в кланы")]
             ]
@@ -11819,6 +11846,424 @@ def transfer_leadership(current_leader_id: str, new_leader_id: str, data: Dict) 
         f"👤 Вы теперь обычный участник клана."
     )
 
+async def clan_shop_open(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Открывает магазин клана (только для главы)."""
+    try:
+        user_id = str(update.effective_user.id)
+        data = load_data()
+        clan_id = get_user_clan(user_id, data)
+        
+        if not clan_id:
+            await update.message.reply_text("❌ Вы не состоите в клане!")
+            return
+        
+        clan = get_clan_data(clan_id, data)
+        if not clan:
+            await update.message.reply_text("❌ Клан не найден!")
+            return
+        
+        if not is_clan_leader(user_id, clan_id, data):
+            await update.message.reply_text("❌ Только глава клана может пользоваться магазином!")
+            return
+        
+        super_coins = clan.get("super_coins", 0)
+        clan_name = html.escape(clan.get("name", "Клан"))
+        
+        # ⭐ Формируем текст ⭐
+        text = (
+            f"🛒 <b>Магазин клана «{clan_name}»</b>\n\n"
+            f"🪙 <b>Бюджет клана:</b> {super_coins} супер-коинов\n\n"
+            f"📦 <b>Доступные товары:</b>\n\n"
+        )
+        
+        for item_id, item in CLAN_SHOP_ITEMS.items():
+            can_afford = super_coins >= item["price"]
+            status = "✅" if can_afford else "❌"
+            text += (
+                f"{status} <b>{item['name']}</b> — {item['price']} 🪙\n"
+                f"<i>{item['description']}</i>\n\n"
+            )
+        
+        # ⭐ Формируем клавиатуру ⭐
+        keyboard = []
+        for item_id, item in CLAN_SHOP_ITEMS.items():
+            can_afford = super_coins >= item["price"]
+            if can_afford:
+                keyboard.append([
+                    InlineKeyboardButton(
+                        f"{item['emoji']} Купить {item['name']} — {item['price']} 🪙",
+                        callback_data=f"clan_shop_confirm_{item_id}"
+                    )
+                ])
+            else:
+                keyboard.append([
+                    InlineKeyboardButton(
+                        f"❌ Недостаточно супер-коинов ({item['price']} 🪙)",
+                        callback_data="clan_shop_no_coins"
+                    )
+                ])
+        
+        keyboard.append([
+            InlineKeyboardButton("🔙 Назад в клан", callback_data="clan_shop_back")
+        ])
+        
+        await update.message.reply_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+        
+    except Exception as e:
+        logger.error(f"Ошибка clan_shop_open: {e}")
+        await update.message.reply_text("❌ Ошибка при открытии магазина")
+
+async def clan_shop_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Показывает подтверждение покупки товара."""
+    try:
+        query = update.callback_query
+        user_id = str(query.from_user.id)
+        item_id = query.data.replace("clan_shop_confirm_", "")
+        
+        if item_id not in CLAN_SHOP_ITEMS:
+            await query.answer("❌ Неизвестный товар", show_alert=True)
+            return
+        
+        data = load_data()
+        clan_id = get_user_clan(user_id, data)
+        
+        if not clan_id:
+            await query.answer("❌ Вы не в клане", show_alert=True)
+            return
+        
+        clan = get_clan_data(clan_id, data)
+        if not clan:
+            await query.answer("❌ Клан не найден", show_alert=True)
+            return
+        
+        if not is_clan_leader(user_id, clan_id, data):
+            await query.answer("❌ Только глава может покупать", show_alert=True)
+            return
+        
+        item = CLAN_SHOP_ITEMS[item_id]
+        super_coins = clan.get("super_coins", 0)
+        
+        if super_coins < item["price"]:
+            await query.answer("❌ Недостаточно супер-коинов!", show_alert=True)
+            return
+        
+        clan_name = html.escape(clan.get("name", "Клан"))
+        
+        text = (
+            f"⚠️ <b>Подтверждение покупки</b>\n\n"
+            f"🛒 Товар: <b>{item['name']}</b>\n"
+            f"💰 Цена: {item['price']} 🪙\n"
+            f"🏰 Клан: {clan_name}\n\n"
+            f"📦 <b>Текущий бюджет:</b> {super_coins} 🪙\n"
+            f"📉 <b>После покупки:</b> {super_coins - item['price']} 🪙\n\n"
+            f"<i>{item['description']}</i>\n\n"
+            f"✅ Подтвердить покупку?"
+        )
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ Да, купить", callback_data=f"clan_shop_buy_{item_id}"),
+                InlineKeyboardButton("❌ Отмена", callback_data="clan_shop_cancel")
+            ]
+        ]
+        
+        try:
+            await query.edit_message_text(
+                text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            if "Message is not modified" not in str(e):
+                logger.error(f"Ошибка clan_shop_confirm: {e}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка clan_shop_confirm: {e}")
+        await query.answer("❌ Ошибка", show_alert=True)
+
+
+async def clan_shop_buy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Выполняет покупку товара из магазина клана."""
+    try:
+        query = update.callback_query
+        user_id = str(query.from_user.id)
+        item_id = query.data.replace("clan_shop_buy_", "")
+        
+        if item_id not in CLAN_SHOP_ITEMS:
+            await query.answer("❌ Неизвестный товар", show_alert=True)
+            return
+        
+        data = load_data()
+        clan_id = get_user_clan(user_id, data)
+        
+        if not clan_id:
+            await query.answer("❌ Вы не в клане", show_alert=True)
+            return
+        
+        clan = get_clan_data(clan_id, data)
+        if not clan:
+            await query.answer("❌ Клан не найден", show_alert=True)
+            return
+        
+        if not is_clan_leader(user_id, clan_id, data):
+            await query.answer("❌ Только глава может покупать", show_alert=True)
+            return
+        
+        item = CLAN_SHOP_ITEMS[item_id]
+        super_coins = clan.get("super_coins", 0)
+        
+        if super_coins < item["price"]:
+            await query.answer("❌ Недостаточно супер-коинов!", show_alert=True)
+            return
+        
+        clan_name = clan.get("name", "Клан")
+        members = list(clan.get("members", {}).keys())
+        
+        if not members:
+            await query.answer("❌ В клане нет участников!", show_alert=True)
+            return
+        
+        # ⭐ Выполняем покупку в зависимости от товара ⭐
+        result_text = ""
+        
+        if item_id == "epic":
+            # 🎴 Рандомный Epic
+            # Собираем все Epic-карты
+            epic_cards = [
+                c for c in data["cards"]
+                if c.get("available", True) and c.get("rarity") == "Epic"
+            ]
+            
+            if not epic_cards:
+                await query.answer("❌ Нет доступных Epic-карт!", show_alert=True)
+                return
+            
+            # Выбираем случайную карту и случайного участника
+            chosen_card = random.choice(epic_cards)
+            chosen_member_id = random.choice(members)
+            
+            # Выдаём карту
+            member_data = data["users"].get(chosen_member_id, {})
+            member_data.setdefault("cards", []).append(chosen_card["id"])
+            
+            chosen_member_name = member_data.get("first_name", "Участник")
+            if member_data.get("last_name"):
+                chosen_member_name += f" {member_data['last_name']}"
+            
+            result_text = (
+                f"🎴 <b>Случайный Epic выдан!</b>\n\n"
+                f"🃏 Карта: <b>{html.escape(chosen_card['title'])}</b>\n"
+                f"🌟 Редкость: Epic\n"
+                f"👤 Получил: <b>{html.escape(chosen_member_name)}</b>\n"
+            )
+            
+            # ⭐ Уведомляем получателя ⭐
+            try:
+                caption = generate_card_caption(
+                    chosen_card, member_data, count=1, show_bonus=False
+                )
+                caption += "\n\n🏰 <i>Награда из магазина клана</i>"
+                
+                await context.bot.send_message(
+                    chat_id=int(chosen_member_id),
+                    text=(
+                        f"🎁 <b>Вам выдана карта из магазина клана!</b>\n\n"
+                        f"🏰 Клан: {html.escape(clan_name)}\n"
+                        f"🃏 Карта: <b>{html.escape(chosen_card['title'])}</b>\n"
+                        f"🌟 Редкость: Epic"
+                    ),
+                    parse_mode="HTML"
+                )
+            except Exception as notify_error:
+                logger.warning(f"Не удалось уведомить получателя {chosen_member_id}: {notify_error}")
+        
+        elif item_id == "rolls":
+            # 🎲 2 бесплатные попытки каждому
+            for member_id in members:
+                member_data = data["users"].get(member_id, {})
+                member_data["free_rolls"] = member_data.get("free_rolls", 0) + 2
+            
+            result_text = (
+                f"🎲 <b>Бесплатные попытки выданы!</b>\n\n"
+                f"👥 Получателей: {len(members)}\n"
+                f"🎯 Каждый получил: +2 попытки\n"
+            )
+            
+            # ⭐ Уведомляем всех участников ⭐
+            for member_id in members:
+                try:
+                    await context.bot.send_message(
+                        chat_id=int(member_id),
+                        text=(
+                            f"🎁 <b>Бонус из магазина клана!</b>\n\n"
+                            f"🏰 Клан: {html.escape(clan_name)}\n"
+                            f"🎲 Вам выдано: <b>+2 бесплатные попытки</b>\n\n"
+                            f"💡 Используйте их для получения досье."
+                        ),
+                        parse_mode="HTML"
+                    )
+                except Exception as notify_error:
+                    logger.warning(f"Не удалось уведомить {member_id}: {notify_error}")
+        
+        elif item_id == "cents":
+            # 💰 5000 бэт-коинов рандомному
+            chosen_member_id = random.choice(members)
+            
+            member_data = data["users"].get(chosen_member_id, {})
+            member_data["cents"] = member_data.get("cents", 0) + 5000
+            
+            chosen_member_name = member_data.get("first_name", "Участник")
+            if member_data.get("last_name"):
+                chosen_member_name += f" {member_data['last_name']}"
+            
+            result_text = (
+                f"💰 <b>Бэт-коины выданы!</b>\n\n"
+                f"💵 Сумма: <b>5000</b> бэт-коинов\n"
+                f"👤 Получил: <b>{html.escape(chosen_member_name)}</b>\n"
+            )
+            
+            # ⭐ Уведомляем получателя ⭐
+            try:
+                await context.bot.send_message(
+                    chat_id=int(chosen_member_id),
+                    text=(
+                        f"🎁 <b>Бонус из магазина клана!</b>\n\n"
+                        f"🏰 Клан: {html.escape(clan_name)}\n"
+                        f"💰 Вам выдано: <b>+5000 бэт-коинов</b>"
+                    ),
+                    parse_mode="HTML"
+                )
+            except Exception as notify_error:
+                logger.warning(f"Не удалось уведомить {chosen_member_id}: {notify_error}")
+        
+        # ⭐ Списываем супер-коины ⭐
+        clan["super_coins"] = super_coins - item["price"]
+        save_data(data)
+        
+        # ⭐ Формируем итоговое сообщение ⭐
+        final_text = (
+            f"✅ <b>Покупка успешна!</b>\n\n"
+            f"{result_text}\n"
+            f"💰 Списано: {item['price']} 🪙\n"
+            f"📉 Новый бюджет клана: {clan['super_coins']} 🪙"
+        )
+        
+        keyboard = [
+            [InlineKeyboardButton("🛒 Вернуться в магазин", callback_data="clan_shop_back_to_menu")],
+            [InlineKeyboardButton("🔙 Назад в клан", callback_data="clan_shop_back")]
+        ]
+        
+        try:
+            await query.edit_message_text(
+                final_text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            if "Message is not modified" not in str(e):
+                logger.error(f"Ошибка clan_shop_buy: {e}")
+        
+        await query.answer("✅ Покупка совершена!", show_alert=False)
+        logger.info(f"Глава {user_id} купил товар {item_id} за {item['price']} супер-коинов для клана {clan_name}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка clan_shop_buy: {e}")
+        await query.answer("❌ Ошибка при покупке", show_alert=True)
+
+
+async def clan_shop_back(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Возвращает в меню магазина клана."""
+    try:
+        query = update.callback_query
+        user_id = str(query.from_user.id)
+        data = load_data()
+        clan_id = get_user_clan(user_id, data)
+        
+        if not clan_id:
+            await query.answer("❌ Вы не в клане", show_alert=True)
+            return
+        
+        clan = get_clan_data(clan_id, data)
+        if not clan:
+            await query.answer("❌ Клан не найден", show_alert=True)
+            return
+        
+        super_coins = clan.get("super_coins", 0)
+        clan_name = html.escape(clan.get("name", "Клан"))
+        
+        text = (
+            f"🛒 <b>Магазин клана «{clan_name}»</b>\n\n"
+            f"🪙 <b>Бюджет клана:</b> {super_coins} супер-коинов\n\n"
+            f"📦 <b>Доступные товары:</b>\n\n"
+        )
+        
+        for item_id, item in CLAN_SHOP_ITEMS.items():
+            can_afford = super_coins >= item["price"]
+            status = "✅" if can_afford else "❌"
+            text += (
+                f"{status} <b>{item['name']}</b> — {item['price']} 🪙\n"
+                f"<i>{item['description']}</i>\n\n"
+            )
+        
+        keyboard = []
+        for item_id, item in CLAN_SHOP_ITEMS.items():
+            can_afford = super_coins >= item["price"]
+            if can_afford:
+                keyboard.append([
+                    InlineKeyboardButton(
+                        f"{item['emoji']} Купить {item['name']} — {item['price']} 🪙",
+                        callback_data=f"clan_shop_confirm_{item_id}"
+                    )
+                ])
+            else:
+                keyboard.append([
+                    InlineKeyboardButton(
+                        f"❌ Недостаточно супер-коинов ({item['price']} 🪙)",
+                        callback_data="clan_shop_no_coins"
+                    )
+                ])
+        
+        keyboard.append([
+            InlineKeyboardButton("🔙 Назад в клан", callback_data="clan_shop_back")
+        ])
+        
+        try:
+            await query.edit_message_text(
+                text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            if "Message is not modified" not in str(e):
+                logger.error(f"Ошибка clan_shop_back: {e}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка clan_shop_back: {e}")
+        await query.answer("❌ Ошибка", show_alert=True)
+
+
+async def clan_shop_back_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Алиас для возврата в магазин после покупки."""
+    await clan_shop_back(update, context)
+
+
+async def clan_shop_no_coins(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработчик кнопки 'Недостаточно супер-коинов'."""
+    try:
+        query = update.callback_query
+        await query.answer("❌ Недостаточно супер-коинов в бюджете клана!", show_alert=True)
+    except Exception as e:
+        logger.error(f"Ошибка clan_shop_no_coins: {e}")
+
+
+async def clan_shop_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Отмена покупки — возврат в магазин."""
+    await clan_shop_back(update, context)
+
 # ===== ЗАПУСК БОТА =====
 
 def main() -> None:
@@ -11915,6 +12360,12 @@ def main() -> None:
             CallbackQueryHandler(open_superman_villain_box, pattern=r"^shop_open_superman_villain$"),
             CallbackQueryHandler(accept_clan_invite_callback, pattern=r"^accept_clan_invite$"),
             CallbackQueryHandler(decline_clan_invite_callback, pattern=r"^decline_clan_invite$"),
+            CallbackQueryHandler(clan_shop_confirm, pattern=r"^clan_shop_confirm_"),
+            CallbackQueryHandler(clan_shop_buy, pattern=r"^clan_shop_buy_"),
+            CallbackQueryHandler(clan_shop_back, pattern=r"^clan_shop_back$"),
+            CallbackQueryHandler(clan_shop_back_to_menu, pattern=r"^clan_shop_back_to_menu$"),
+            CallbackQueryHandler(clan_shop_no_coins, pattern=r"^clan_shop_no_coins$"),
+            CallbackQueryHandler(clan_shop_cancel, pattern=r"^clan_shop_cancel$"),
         ]
 
         for handler in handlers:
