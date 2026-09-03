@@ -11903,10 +11903,6 @@ async def clan_shop_open(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     )
                 ])
         
-        keyboard.append([
-            InlineKeyboardButton("🔙 Назад в клан", callback_data="clan_shop_back")
-        ])
-        
         await update.message.reply_text(
             text,
             reply_markup=InlineKeyboardMarkup(keyboard),
