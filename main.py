@@ -1200,7 +1200,7 @@ async def show_cards_by_rarity(update: Update, context: ContextTypes.DEFAULT_TYP
             return
         
         # ⭐ ИСПРАВЛЕНИЕ: Используем HTML вместо Markdown ⭐
-        caption = generate_card_caption(card, user_data, count=count, show_bonus=False, super_coins_earned=super_coins_earned)
+        caption = generate_card_caption(card, user_data, count=count, show_bonus=False)
         
         # ⭐ КЛАВИАТУРА С КНОПКОЙ ПОИСКА ⭐
         nav_buttons = []
@@ -1319,7 +1319,7 @@ async def show_all_cards(update: Update, context: ContextTypes.DEFAULT_TYPE, sta
         
         count = card_counts[current_card_id]
         # ⭐ ИСПРАВЛЕНИЕ: Используем HTML ⭐
-        caption = generate_card_caption(card, user_data, count=count, show_bonus=False, super_coins_earned=super_coins_earned)
+        caption = generate_card_caption(card, user_data, count=count, show_bonus=False)
         
         # ⭐ КЛАВИАТУРА С КНОПКОЙ ПОИСКА ⭐
         nav_buttons = []
@@ -1484,7 +1484,7 @@ async def archive_search_execute(update: Update, context: ContextTypes.DEFAULT_T
         current_card_id, count = filtered_cards[0]
         card = find_card_by_id(current_card_id, data["cards"])
         
-        caption = generate_card_caption(card, user_data, count=count, show_bonus=False, super_coins_earned=super_coins_earned)
+        caption = generate_card_caption(card, user_data, count=count, show_bonus=False)
         caption += f"\n\n🔍 Найдено карт: {len(filtered_cards)}\nПо запросу: \"{text}\""
         
         # ⭐ Клавиатура для результатов поиска ⭐
@@ -1591,7 +1591,7 @@ async def archive_search_callback(update: Update, context: ContextTypes.DEFAULT_
                 await query.edit_message_text("❌ Карта не найдена!")
                 return
     
-            caption = generate_card_caption(card, user_data, count=count, show_bonus=False, super_coins_earned=super_coins_earned)
+            caption = generate_card_caption(card, user_data, count=count, show_bonus=False)
             caption += f"\n\n🔍 Найдено карт: {len(filtered_cards)}"
     
             # ⭐ Клавиатура ⭐
@@ -1750,7 +1750,7 @@ async def mycards_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 return
     
             count = card_counts[card["id"]]
-            caption = generate_card_caption(card, user_data, count=count, show_bonus=False, super_coins_earned=super_coins_earned)
+            caption = generate_card_caption(card, user_data, count=count, show_bonus=False)
     
             # ⭐ ИСПРАВЛЕНИЕ: Правильные callback_data и кнопка поиска ⭐
             nav_buttons = []
@@ -1859,7 +1859,7 @@ async def mycards_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 return
             
             count = card_counts[card["id"]]
-            caption = generate_card_caption(card, user_data, count=count, show_bonus=False, super_coins_earned=super_coins_earned)
+            caption = generate_card_caption(card, user_data, count=count, show_bonus=False)
             
             # ⭐ ФОРМИРУЕМ КНОПКИ С УЧЁТОМ ГРАНИЦ ⭐
             nav_buttons = []
@@ -2515,7 +2515,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
             count = card_counts[card["id"]]
             caption = generate_card_caption(
-                card, user_data, count=count, show_bonus=False, super_coins_earned=super_coins_earned
+                card, user_data, count=count, show_bonus=False
             )
             nav_buttons = []
 
@@ -5385,7 +5385,7 @@ async def craft_execute(
         await query.edit_message_text(result_text, parse_mode="Markdown")
         
         # ⭐ 2. Отправляем полученную карту ОТДЕЛЬНЫМ сообщением ⭐
-        caption = generate_card_caption(new_card, user_data, count=1, show_bonus=False, super_coins_earned=super_coins_earned)
+        caption = generate_card_caption(new_card, user_data, count=1, show_bonus=False)
         await send_card(update, new_card, context, caption=caption)
         
         # ⭐ 3. Отправляем НОВОЕ сообщение с меню выбора карт (не редактируем!) ⭐
@@ -7671,7 +7671,7 @@ async def shop_seasonal(update: Update, context: ContextTypes.DEFAULT_TYPE, page
         can_afford = user_cents >= price
         
         # ⭐ Формируем caption (стандартный, как в архиве) ⭐
-        caption = generate_card_caption(card, user_data=None, count=1, show_bonus=False, super_coins_earned=super_coins_earned)
+        caption = generate_card_caption(card, user_data=None, count=1, show_bonus=False)
         caption += f"\n\n💰 <b>Цена:</b> {price} бэт-коинов"
         if not can_afford:
             caption += f"\n❌ <i>Недостаточно бэт-коинов (у вас: {user_cents})</i>"
@@ -11385,7 +11385,7 @@ async def finish_interrogation(update: Update, context: ContextTypes.DEFAULT_TYP
                 save_data(data)
                 
                 # ⭐ Формируем caption для карты ⭐
-                caption = generate_card_caption(card, user_data, count=1, show_bonus=False, super_coins_earned=super_coins_earned)
+                caption = generate_card_caption(card, user_data, count=1, show_bonus=False)
                 
                 result_text = (
                     f"✅ <b>Допрос завершён!</b>\n\n"
