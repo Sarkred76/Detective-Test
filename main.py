@@ -9064,7 +9064,7 @@ async def referral_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 # ===== ЕЖЕДНЕВНЫЕ КВЕСТЫ =====
 DAILY_QUESTS_POOL = [
-    {"id": "common_4", "desc": "Получить 4 карты редкости Common через «Получить досье»", "reward_type": "cents", "reward_amount": 500, "target": 4},
+    {"id": "common_4", "desc": "Получить 4 карты редкости Common через «Получить досье»", "reward_type": "super-coins", "reward_amount": 3, "target": 4},
     {"id": "darts_win_2", "desc": "Победить в дартсе 2 раза", "reward_type": "free_rolls", "reward_amount": 1, "target": 2},
     {"id": "burn_common_3", "desc": "Сжечь 3 карты редкости Common", "reward_type": "free_rolls", "reward_amount": 1, "target": 3},
     {"id": "trade_2", "desc": "Совершить 2 трейда", "reward_type": "cents", "reward_amount": 250, "target": 2},
@@ -9098,19 +9098,39 @@ def check_daily_quests_reset(user_data: Dict) -> None:
         user_data["daily_quests_last_reset"] = int(now_msk.timestamp())
 
 
-async def notify_quest_completed(context: ContextTypes.DEFAULT_TYPE, chat_id: int, quest: Dict) -> None:
+async def notify_quest_completed(context: ContextTypes.DEFAULT_TYPE, chat_id: int, quest: Dict, data: Dict = None) -> None:
     """Отправляет отдельное уведомление о выполнении квеста."""
     reward_text = ""
+    
     if quest["reward_type"] == "cents":
         reward_text = f"{quest['reward_amount']} Бэт-коинов 💰"
     elif quest["reward_type"] == "free_rolls":
         reward_text = f"{quest['reward_amount']} бесплатная попытка 🔍"
+    elif quest["reward_type"] == "rep_points":
+        reward_text = f"{quest['reward_amount']} очков репутации 💥"
+    # ⭐ НОВОЕ: Супер-коины ⭐
+    elif quest["reward_type"] == "super_coins":
+        amount = quest["reward_amount"]
+        # Склонение слова "супер-коин"
+        n = amount % 100
+        n1 = n % 10
+        if n > 10 and n < 20:
+            word = "супер-коинов"
+        elif n1 > 1 and n1 < 5:
+            word = "супер-коина"
+        elif n1 == 1:
+            word = "супер-коин"
+        else:
+            word = "супер-коинов"
+            
+        reward_text = f"{amount} {word} в бюджет клана 🪙"
     
     text = (
-        f"✅ <b>Выполнен квест!</b>\n\n"
+        f"✅ <b>Выполнен квест!</b>\n"
         f"📋 {quest['desc']}\n"
         f"🎁 Ваша награда: {reward_text}"
     )
+    
     try:
         await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
     except Exception as e:
@@ -9123,15 +9143,7 @@ async def update_quest_progress(
     quest_id: str,
     amount: int = 1
 ) -> None:
-    """
-    Обновляет прогресс квеста. Вызывается из игровых функций.
-    ⚡ ВАЖНО: Добавляйте вызов этой функции в соответствующие места:
-    - handle_message() при получении карты Common → update_quest_progress(..., "common_4", 1)
-    - darts_play() при победе → update_quest_progress(..., "darts_win_2", 1)
-    - burn_execute() при сжигании карты Common → update_quest_progress(..., "burn_common_3", 1)
-    - trade_final_callback() при успешном трейде → update_quest_progress(..., "trade_2", 1)
-    - basket_play() при любой игре → update_quest_progress(..., "basket_3", 1)
-    """
+    """Обновляет прогресс квеста. Вызывается из игровых функций."""
     data = load_data()
     user_data = data["users"].get(user_id)
     if not user_data:
@@ -9147,17 +9159,30 @@ async def update_quest_progress(
             quest["progress"] = min(quest["progress"] + amount, quest["target"])
             if quest["progress"] >= quest["target"]:
                 quest["completed"] = True
-                # Выдаём награду
+                
+                # ⭐ ВЫДАЁМ НАГРАДУ ⭐
                 if quest["reward_type"] == "cents":
                     user_data["cents"] = user_data.get("cents", 0) + quest["reward_amount"]
                 elif quest["reward_type"] == "free_rolls":
                     user_data["free_rolls"] = user_data.get("free_rolls", 0) + quest["reward_amount"]
+                # ⭐ НОВОЕ: Начисление супер-коинов в бюджет клана ⭐
+                elif quest["reward_type"] == "super_coins":
+                    clan_id = get_user_clan(user_id, data)
+                    if clan_id:
+                        clan = data["clans"].get(clan_id)
+                        if clan:
+                            clan["super_coins"] = clan.get("super_coins", 0) + quest["reward_amount"]
+                            logger.info(f"Клан {clan.get('name')} получил {quest['reward_amount']} супер-коинов за квест {quest_id}")
+                        else:
+                            logger.warning(f"Клан {clan_id} не найден при начислении супер-коинов")
+                    else:
+                        logger.info(f"Игрок {user_id} выполнил квест на супер-коины, но не состоит в клане. Награда пропущена.")
                 
                 changed = True
                 save_data(data)
                 
                 # Отправляем уведомление
-                await notify_quest_completed(context, int(user_id), quest)
+                await notify_quest_completed(context, int(user_id), quest, data) # ⭐ Передаём data для названия клана
                 logger.info(f"Игрок {user_id} выполнил квест {quest_id}")
             else:
                 changed = True
@@ -9600,6 +9625,8 @@ async def quests_daily_view(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             reward_text = f"{quest['reward_amount']} 💰"
         elif quest["reward_type"] == "free_rolls":
             reward_text = f"{quest['reward_amount']} 🔍"
+        elif quest["reward_type"] == "super_coins":
+            reward_text = f"{quest['reward_amount']} 🪙"
         
         text += (
             f"{status_icon} {quest['desc']}\n"
@@ -9685,8 +9712,8 @@ WEEKLY_QUESTS_POOL = [
     {
         "id": "weekly_epic_tu_1",
         "desc": "Получить карту редкости Epic Team-up через «Получить досье»",
-        "reward_type": "cents",
-        "reward_amount": 1000,
+        "reward_type": "super-coins",
+        "reward_amount": 5,
         "target": 1
     },
 ]
@@ -9833,6 +9860,8 @@ async def quests_weekly_view(update: Update, context: ContextTypes.DEFAULT_TYPE)
             reward_text = f"{quest['reward_amount']} 🔍"
         elif quest["reward_type"] == "rep_points":
             reward_text = f"{quest['reward_amount']} 💥"
+        elif quest["reward_type"] == "super_coins":
+            reward_text = f"{quest['reward_amount']} 🪙"
         
         text += (
             f"{status_icon} {quest['desc']}\n"
