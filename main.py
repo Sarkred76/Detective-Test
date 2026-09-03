@@ -12397,6 +12397,76 @@ async def add_supercoins_to_clan(update: Update, context: ContextTypes.DEFAULT_T
         logger.error(f"Ошибка добавления супер-коинов: {e}")
         await update.message.reply_text("❌ Ошибка при изменении бюджета клана")
 
+async def start_new_season(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Сбрасывает сезонные очки репутации и счётчик Rolls-Box у ВСЕХ игроков."""
+    try:
+        data = load_data()
+        user_id = str(update.effective_user.id)
+        
+        if not is_admin(user_id, data):
+            await update.message.reply_text("🚫 Только для администратора!")
+            return
+        
+        users = data.get("users", {})
+        if not users:
+            await update.message.reply_text("⚠️ Нет зарегистрированных игроков!")
+            return
+        
+        # ⭐ Подтверждение ⭐
+        if not context.args or context.args[0].lower() != "confirm":
+            await update.message.reply_text(
+                "⚠️ <b>ВНИМАНИЕ! Это действие затронет ВСЕХ игроков!</b>\n\n"
+                "📋 Будет сброшено:\n"
+                "• 💥 Сезонные очки репутации (season_points) → 0\n"
+                "• 📦 Счётчик купленных Rolls-Box (rolls_box_price) → 25000\n\n"
+                "⚠️ <b>НЕ будут затронуты:</b>\n"
+                "• 💎 Общие очки репутации (total_points)\n"
+                "• 💰 Бэт-коины\n"
+                "• 🃏 Карты\n"
+                "• 🪙 Супер-коины кланов\n\n"
+                "Для подтверждения выполните:\n"
+                "<code>/start_new_season confirm</code>",
+                parse_mode="HTML"
+            )
+            return
+        
+        # ⭐ Выполняем сброс ⭐
+        reset_count = 0
+        total_season_points = 0
+        
+        for uid, udata in users.items():
+            # Сбрасываем сезонные очки
+            old_season = udata.get("season_points", 0)
+            total_season_points += old_season
+            udata["season_points"] = 0
+            
+            # Сбрасываем счётчик Rolls-Box к начальной цене
+            udata["rolls_box_price"] = 25000
+            
+            reset_count += 1
+        
+        save_data(data)
+        
+        await update.message.reply_text(
+            f"✅ <b>Новый сезон начат!</b>\n\n"
+            f"👥 Игроков обработано: {reset_count}\n"
+            f"💥 Суммарно сброшено сезонных очков: {total_season_points}\n"
+            f"📦 Счётчик Rolls-Box сброшен до 25000 у всех\n\n"
+            f"🎉 Удачи в новом сезоне!",
+            parse_mode="HTML"
+        )
+        
+        logger.info(
+            f"Админ {user_id} начал новый сезон: "
+            f"сброшены season_points и rolls_box_price у {reset_count} игроков"
+        )
+        
+    except Exception as e:
+        logger.error(f"Ошибка start_new_season: {e}")
+        await update.message.reply_text("❌ Ошибка при начале нового сезона")
+
+
+
 # ===== ЗАПУСК БОТА =====
 
 def main() -> None:
@@ -12466,6 +12536,7 @@ def main() -> None:
             CommandHandler("give_card_to_batpass", give_card_to_batpass),
             CommandHandler("give_superman_box", give_superman_box),
             CommandHandler("add_supercoins", add_supercoins_to_clan),
+            CommandHandler("start_new_season", start_new_season),
             MessageHandler(filters.PHOTO | filters.VIDEO | filters.ANIMATION, handle_message),
             MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message),
             CallbackQueryHandler(mycards_callback, pattern=r"^(mycards_|barracks_|card_).*"),
