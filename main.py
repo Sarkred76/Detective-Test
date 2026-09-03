@@ -12150,8 +12150,7 @@ async def clan_shop_buy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         )
         
         keyboard = [
-            [InlineKeyboardButton("🛒 Вернуться в магазин", callback_data="clan_shop_back_to_menu")],
-            [InlineKeyboardButton("🔙 Назад в клан", callback_data="clan_shop_back")]
+            [InlineKeyboardButton("🛒 Вернуться в магазин", callback_data="clan_shop_back_to_menu")]
         ]
         
         try:
@@ -12223,10 +12222,6 @@ async def clan_shop_back(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                         callback_data="clan_shop_no_coins"
                     )
                 ])
-        
-        keyboard.append([
-            InlineKeyboardButton("🔙 Назад в клан", callback_data="clan_shop_back")
-        ])
         
         try:
             await query.edit_message_text(
