@@ -1062,6 +1062,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             response += "/give_card_to_batpass [ID_карты] [количество] - выдать карту всем с Бэт-пассом\n"
             response += "/give_superman_box heroes @username\n"
             response += "/give_superman_box villain @username\n"
+            response += "/add\\_supercoins \\[@никнейм\\] \\[количество\\] - начислить супер-коины в бюджет клана\n"
             
             
         response += "💡 Нужна помощь?\n"
@@ -12260,6 +12261,118 @@ async def clan_shop_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     """Отмена покупки — возврат в магазин."""
     await clan_shop_back(update, context)
 
+async def add_supercoins_to_clan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Начисляет супер-коины в бюджет клана по @username участника."""
+    try:
+        data = load_data()
+        if not is_admin(str(update.effective_user.id), data):
+            await update.message.reply_text("🚫 Только для администратора!")
+            return
+        
+        # ⭐ Проверяем аргументы ⭐
+        if not context.args or len(context.args) < 2:
+            await update.message.reply_text(
+                "ℹ️ **Формат команды:**\n"
+                "/add\\_supercoins \\[@никнейм\\] \\[количество\\]\n\n"
+                "**Примеры:**\n"
+                "/add\\_supercoins @username 100 — начислить 100 супер-коинов в клан игрока\n"
+                "/add\\_supercoins @player 50 — начислить 50 супер-коинов в клан игрока",
+                parse_mode="Markdown"
+            )
+            return
+        
+        target_input = context.args[0]
+        supercoins_amount = int(context.args[1])
+        
+        # ⭐ Определяем ID игрока ⭐
+        target_user_id = None
+        if target_input.startswith("@"):
+            username_to_find = target_input[1:].strip().lower()
+            for uid, udata in data["users"].items():
+                if udata.get("username", "").lower() == username_to_find:
+                    target_user_id = uid
+                    break
+            if not target_user_id:
+                await update.message.reply_text(f"⚠️ Игрок с никнеймом @{username_to_find} не найден!")
+                return
+        else:
+            target_user_id = target_input
+            if target_user_id not in data["users"]:
+                await update.message.reply_text(f"⚠️ Игрок с ID {target_user_id} не найден!")
+                return
+        
+        target_user_data = data["users"].get(target_user_id, {})
+        target_name = target_user_data.get("first_name", "Игрок")
+        if target_user_data.get("last_name"):
+            target_name += f" {target_user_data['last_name']}"
+        
+        # ⭐ Находим клан игрока ⭐
+        clan_id = get_user_clan(target_user_id, data)
+        if not clan_id:
+            await update.message.reply_text(
+                f"⚠️ Игрок {html.escape(target_name)} не состоит ни в одном клане!\n\n"
+                f"💡 Супер-коины можно начислять только в бюджет существующего клана."
+            )
+            return
+        
+        clan = get_clan_data(clan_id, data)
+        if not clan:
+            await update.message.reply_text("❌ Клан не найден или повреждён!")
+            return
+        
+        clan_name = clan.get("name", "Клан")
+        
+        # ⭐ Миграция на случай отсутствия поля ⭐
+        if "super_coins" not in clan:
+            clan["super_coins"] = 0
+        
+        # ⭐ Начисляем супер-коины ⭐
+        old_balance = clan["super_coins"]
+        new_balance = old_balance + supercoins_amount
+        
+        # ⭐ Защита от ухода в минус ⭐
+        if new_balance < 0:
+            await update.message.reply_text(
+                f"⚠️ Нельзя списать больше, чем есть в бюджете клана!\n\n"
+                f"🏰 Клан: {html.escape(clan_name)}\n"
+                f"🪙 В бюджете: {old_balance} супер-коинов\n"
+                f"❌ Вы пытаетесь списать: {-supercoins_amount} супер-коинов"
+            )
+            return
+        
+        clan["super_coins"] = new_balance
+        save_data(data)
+        
+        # ⭐ Формируем текст ответа ⭐
+        if supercoins_amount > 0:
+            action_text = f"💎 Начислено: +{supercoins_amount} супер-коинов"
+        elif supercoins_amount < 0:
+            action_text = f"💸 Списано: {supercoins_amount} супер-коинов"
+        else:
+            action_text = "ℹ️ Количество равно 0 — бюджет не изменился"
+        
+        await update.message.reply_text(
+            f"✅ **Бюджет клана изменён!**\n\n"
+            f"🏰 Клан: {html.escape(clan_name)}\n"
+            f"👤 Через игрока: {html.escape(target_name)} (@{target_user_data.get('username', '—')})\n\n"
+            f"{action_text}\n"
+            f"📊 Было: {old_balance} 🪙\n"
+            f"📈 Стало: {new_balance} 🪙",
+            parse_mode="Markdown"
+        )
+        
+        logger.info(
+            f"Админ {update.effective_user.id} изменил бюджет клана {clan_name}: "
+            f"{old_balance} → {new_balance} ({'+' if supercoins_amount >= 0 else ''}{supercoins_amount}) "
+            f"через игрока {target_user_id}"
+        )
+        
+    except ValueError:
+        await update.message.reply_text("⚠️ Количество должно быть числом!")
+    except Exception as e:
+        logger.error(f"Ошибка добавления супер-коинов: {e}")
+        await update.message.reply_text("❌ Ошибка при изменении бюджета клана")
+
 # ===== ЗАПУСК БОТА =====
 
 def main() -> None:
@@ -12328,6 +12441,7 @@ def main() -> None:
             CommandHandler("remove_batpass", remove_batpass),
             CommandHandler("give_card_to_batpass", give_card_to_batpass),
             CommandHandler("give_superman_box", give_superman_box),
+            CommandHandler("add_supercoins", add_supercoins_to_clan),
             MessageHandler(filters.PHOTO | filters.VIDEO | filters.ANIMATION, handle_message),
             MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message),
             CallbackQueryHandler(mycards_callback, pattern=r"^(mycards_|barracks_|card_).*"),
