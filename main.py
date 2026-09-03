@@ -1062,7 +1062,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             response += "/give_card_to_batpass [ID_карты] [количество] - выдать карту всем с Бэт-пассом\n"
             response += "/give_superman_box heroes @username\n"
             response += "/give_superman_box villain @username\n"
-            response += "/add\\_supercoins \\[@никнейм\\] \\[количество\\] - начислить супер-коины в бюджет клана\n"
+            response += "/add_supercoins [@никнейм] [количество] - начислить супер-коины в бюджет клана\n"
             
             
         response += "💡 Нужна помощь?\n"
