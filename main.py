@@ -45,6 +45,7 @@ from trade_functions import (
 from telegram.error import NetworkError, TimedOut
 from dotenv import load_dotenv
 load_dotenv()
+
 # ===== КОНФИГУРАЦИЯ =====
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -448,128 +449,158 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+def migrate_data(data: Dict) -> Dict:
+    """Применяет миграции к данным. Вызывается только при загрузке с диска."""
+    # Инициализируем активные трейды если нет
+    if "active_trades" not in data:
+        data["active_trades"] = {}
+
+    if "promo_codes" not in data:
+        data["promo_codes"] = {}
+
+    if "seasonal_cards" not in data:
+        data["seasonal_cards"] = {}
+
+    if "clans" not in data:
+        data["clans"] = {}
+
+    for clan in data.get("clans", {}).values():
+        if "max_members" not in clan:
+            clan["max_members"] = MAX_CLAN_MEMBERS
+
+    # ⭐ Миграция супер-коинов для кланов ⭐
+    for clan_id, clan_data in data.get("clans", {}).items():
+        if "super_coins" not in clan_data:
+            clan_data["super_coins"] = 0
+
+    if "user_clan" not in data:
+        data["user_clan"] = {}
+
+    # ⭐ Миграция пользователей ⭐
+    for user_id, user_data in data.get("users", {}).items():
+        if "clan_invite_pending" not in user_data:
+            user_data["clan_invite_pending"] = None
+        if "weekly_quests" not in user_data:
+            user_data["weekly_quests"] = []
+        if "weekly_quests_last_reset_year" not in user_data:
+            user_data["weekly_quests_last_reset_year"] = 0
+        if "weekly_quests_last_reset_week" not in user_data:
+            user_data["weekly_quests_last_reset_week"] = 0
+        if "daily_quests_streak" not in user_data:
+            user_data["daily_quests_streak"] = 0
+        if "last_streak_date" not in user_data:
+            user_data["last_streak_date"] = ""
+        if "last_card_time" not in user_data:
+            user_data["last_card_time"] = 0
+        if "free_rolls" not in user_data:
+            user_data["free_rolls"] = 0
+        if "last_dice_time" not in user_data:
+            user_data["last_dice_time"] = 0
+        if "casino_attempts" not in user_data:
+            user_data["casino_attempts"] = 5
+        if "basket_plays" not in user_data:
+            user_data["basket_plays"] = 0
+        if "darts_plays" not in user_data:
+            user_data["darts_plays"] = 0
+        if "darts_last_reset" not in user_data:
+            user_data["darts_last_reset"] = 0
+        if "basket_last_reset" not in user_data:
+            user_data["basket_last_reset"] = 0
+        if "last_casino_reset" not in user_data:
+            user_data["last_casino_reset"] = 0
+        if "used_promo_codes" not in user_data:
+            user_data["used_promo_codes"] = []
+        if "referral_invites" not in user_data:
+            user_data["referral_invites"] = []
+        if "referral_rewards_claimed" not in user_data:
+            user_data["referral_rewards_claimed"] = []
+        if "daily_quests" not in user_data:
+            user_data["daily_quests"] = []
+        if "daily_quests_last_reset" not in user_data:
+            user_data["daily_quests_last_reset"] = 0
+        if "rolls_box_price" not in user_data:
+            user_data["rolls_box_price"] = 25000
+        if "pending_season_boxes" not in user_data:
+            user_data["pending_season_boxes"] = 0
+        
+        # ⭐ Удаление устаревших полей ⭐
+        if "pending_superman_heroes_boxes" in user_data:
+            del user_data["pending_superman_heroes_boxes"]
+        if "pending_superman_villain_boxes" in user_data:
+            del user_data["pending_superman_villain_boxes"]
+        
+        if "has_batpass" not in user_data:
+            user_data["has_batpass"] = False
+        if "batpass_expires_at" not in user_data:
+            user_data["batpass_expires_at"] = 0
+        if "batpass_privileges" not in user_data:
+            user_data["batpass_privileges"] = {
+                "reduced_cooldown": True,
+                "extra_dice_rolls": True,
+                "free_clan_creation": True,
+                "extra_casino_attempts": True,
+            }
+        if "weekly_dice_rolls" not in user_data:
+            user_data["weekly_dice_rolls"] = 1
+        if "last_dice_week_reset" not in user_data:
+            user_data["last_dice_week_reset"] = 0
+        if "last_daily_activity" not in user_data:
+            user_data["last_daily_activity"] = None
+        if "registered_at" not in user_data:
+            user_data["registered_at"] = None
+        if "seasonal_quests" not in user_data:
+            user_data["seasonal_quests"] = {"completed": [], "progress": {}}
+        if "avatar_url" not in user_data:
+            user_data["avatar_url"] = DEFAULT_AVATAR_URL
+        if "avatars" not in user_data:
+            user_data["avatars"] = [DEFAULT_AVATAR_URL]
+        if "event_completed" not in user_data:
+            user_data["event_completed"] = False
+        if "event_completed_at" not in user_data:
+            user_data["event_completed_at"] = 0
+
+    # ⭐ Миграция карт (ВЫНЕСЕНА ИЗ ЦИКЛА ПОЛЬЗОВАТЕЛЕЙ!) ⭐
+    for card in data.get("cards", []):
+        if "is_classic" not in card:
+            card["is_classic"] = False
+    
+    return data
+
+# ⭐ ГЛОБАЛЬНЫЙ КЭШ ⭐
+import time
+_data_cache = {
+    "data": None,
+    "last_load": 0,
+}
+CACHE_TTL = 5  # секунд
+
 def load_data() -> Dict[str, Any]:
-    """Загружает данные из файла или создает новую структуру."""
+    """Загружает данные с кэшированием и миграцией."""
+    current_time = time.time()
+    
+    # ⭐ Если кэш актуален — возвращаем его ⭐
+    if _data_cache["data"] is not None and (current_time - _data_cache["last_load"]) < CACHE_TTL:
+        return _data_cache["data"]
+    
+    # ⭐ Иначе читаем с диска ⭐
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
             
-            # Инициализируем активные трейды если нет
-            if "active_trades" not in data:
-                data["active_trades"] = {}
-
-            if "promo_codes" not in data:
-                data["promo_codes"] = {}
-
-            if "seasonal_cards" not in data:
-                data["seasonal_cards"] = {}  # {card_id: price}
-
-            if "clans" not in data:
-                data["clans"] = {}
-
-            for clan in data.get("clans", {}).values():
-                if "max_members" not in clan:
-                    clan["max_members"] = MAX_CLAN_MEMBERS
-
-            # ⭐ НОВОЕ: Миграция супер-коинов для кланов ⭐
-            for clan_id, clan_data in data.get("clans", {}).items():
-                if "super_coins" not in clan_data:
-                    clan_data["super_coins"] = 0
-
-            if "user_clan" not in data:
-                data["user_clan"] = {}  # {user_id: clan_name}
-
-            for user_id, user_data in data.get("users", {}).items():
-                if "clan_invite_pending" not in user_data:
-                    user_data["clan_invite_pending"] = None  # Для хранения ожидающего приглашения
-                if "weekly_quests" not in user_data:
-                    user_data["weekly_quests"] = []
-                if "weekly_quests_last_reset_year" not in user_data:
-                    user_data["weekly_quests_last_reset_year"] = 0
-                if "weekly_quests_last_reset_week" not in user_data:
-                    user_data["weekly_quests_last_reset_week"] = 0
-                if "daily_quests_streak" not in user_data:
-                    user_data["daily_quests_streak"] = 0
-                if "last_streak_date" not in user_data:
-                    user_data["last_streak_date"] = ""
+            # ⭐ ПРИМЕНЯЕМ МИГРАЦИЮ (только при чтении с диска!) ⭐
+            data = migrate_data(data)
             
-            for user_id, user_data in data.get("users", {}).items():
-                if "last_card_time" not in user_data:
-                    user_data["last_card_time"] = 0
-                if "free_rolls" not in user_data:
-                    user_data["free_rolls"] = 0
-                if "last_dice_time" not in user_data:
-                    user_data["last_dice_time"] = 0
-                if "casino_attempts" not in user_data:
-                    user_data["casino_attempts"] = 5
-                if "basket_plays" not in user_data:
-                    user_data["basket_plays"] = 0
-                if "darts_plays" not in user_data:
-                    user_data["darts_plays"] = 0
-                if "darts_last_reset" not in user_data:
-                    user_data["darts_last_reset"] = 0
-                if "basket_last_reset" not in user_data:
-                    user_data["basket_last_reset"] = 0
-                if "last_casino_reset" not in user_data:
-                    user_data["last_casino_reset"] = 0
-                if "used_promo_codes" not in user_data:
-                    user_data["used_promo_codes"] = []
-                if "referral_invites" not in user_data:
-                    user_data["referral_invites"] = []
-                if "referral_rewards_claimed" not in user_data:
-                    user_data["referral_rewards_claimed"] = []
-                if "daily_quests" not in user_data:
-                    user_data["daily_quests"] = []
-                if "daily_quests_last_reset" not in user_data:
-                    user_data["daily_quests_last_reset"] = 0
-                if "rolls_box_price" not in user_data:
-                    user_data["rolls_box_price"] = 25000
-                if "pending_season_boxes" not in user_data:
-                    user_data["pending_season_boxes"] = 0
-                if "pending_superman_heroes_boxes" in user_data:
-                    del user_data["pending_superman_heroes_boxes"]
-                if "pending_superman_villain_boxes" in user_data:
-                    del user_data["pending_superman_villain_boxes"]
-                if "has_batpass" not in user_data:
-                    user_data["has_batpass"] = False
-                if "batpass_expires_at" not in user_data:
-                    user_data["batpass_expires_at"] = 0
-                if "batpass_privileges" not in user_data:
-                    user_data["batpass_privileges"] = {
-                        "reduced_cooldown": True,      # 2.5 часа вместо 3 часов
-                        "extra_dice_rolls": True,      # 2 броска кубика в неделю
-                        "free_clan_creation": True,    # Бесплатное создание клана
-                        "extra_casino_attempts": True, # 7 попыток в казино вместо 5
-                    }
-                # ⭐ НОВОЕ: Счётчик бросков кубика за неделю ⭐
-                if "weekly_dice_rolls" not in user_data:
-                    user_data["weekly_dice_rolls"] = 1  # 1 бросок по умолчанию
-                if "last_dice_week_reset" not in user_data:
-                    user_data["last_dice_week_reset"] = 0
-                if "last_daily_activity" not in user_data:
-                    user_data["last_daily_activity"] = None  # Дата в формате "YYYY-MM-DD" или None
-                if "registered_at" not in user_data:
-                    user_data["registered_at"] = None  # Дата регистрации в формате "YYYY-MM-DD"
-                if "seasonal_quests" not in user_data:
-                    user_data["seasonal_quests"] = {"completed": [], "progress": {}}
-                # ⭐ НОВОЕ: Миграция аватарок ⭐
-                if "avatar_url" not in user_data:
-                    user_data["avatar_url"] = DEFAULT_AVATAR_URL
-                if "avatars" not in user_data:
-                    user_data["avatars"] = [DEFAULT_AVATAR_URL]
-                if "event_completed" not in user_data:
-                    user_data["event_completed"] = False
-                if "event_completed_at" not in user_data:
-                    user_data["event_completed_at"] = 0
-
-                for card in data.get("cards", []):
-                    if "is_classic" not in card:
-                        card["is_classic"] = False
+            # ⭐ Сохраняем в кэш ⭐
+            _data_cache["data"] = data
+            _data_cache["last_load"] = current_time
             return data
             
         except Exception as e:
             logger.error(f"Ошибка загрузки данных: {e}")
+            # ⭐ При ошибке возвращаем кэш или пустую структуру ⭐
+            if _data_cache["data"] is not None:
+                return _data_cache["data"]
             return {
                 "users": {},
                 "cards": [],
@@ -578,6 +609,7 @@ def load_data() -> Dict[str, Any]:
                 "active_trades": {},
             }
     
+    # ⭐ Файла нет — возвращаем пустую структуру ⭐
     return {
         "users": {},
         "cards": [],
@@ -606,12 +638,15 @@ def check_casino_reset(user_data: Dict) -> None:
         user_data["last_casino_reset"] = current_day_start_ts
 
 def save_data(data: Dict[str, Any]) -> None:
-    """Сохраняет данные в файл, компактно оформляя списки."""
+    """Сохраняет данные в файл, компактно оформляя списки, и обновляет кэш."""
     try:
-        # 1. Сначала превращаем данные в JSON строку с отступами
+        # ⭐ 1. Применяем миграцию перед сохранением ⭐
+        data = migrate_data(data)
+        
+        # 2. Превращаем данные в JSON строку с отступами
         json_str = json.dumps(data, ensure_ascii=False, indent=4)
         
-        # 2. Используем регулярное выражение, чтобы найти все списки [...] 
+        # 3. Используем регулярное выражение, чтобы найти все списки [...] 
         # и удалить внутри них переносы строк, оставив только пробелы
         # Это сделает вид: "cards": [1, 2, 3, 4, 5] вместо многострочного списка
         
@@ -623,15 +658,18 @@ def save_data(data: Dict[str, Any]) -> None:
             cleaned = re.sub(r'\s+', ' ', cleaned)
             return cleaned
 
-        # Ищем паттерны списков. Внимание: это упрощенный регекс, он работает для простых списков чисел/строк
-        # Для вложенных структур может потребоваться более сложный парсер, но для ID карт подойдет
+        # Ищем паттерны списков
         json_str_compact = re.sub(r'\[.*?\]', replace_newlines_in_lists, json_str, flags=re.DOTALL)
 
         with open(DATA_FILE, "w", encoding="utf-8") as f:
             f.write(json_str_compact)
             f.flush()
             os.fsync(f.fileno())
-            
+        
+        # ⭐ 4. Обновляем кэш после успешного сохранения ⭐
+        _data_cache["data"] = data
+        _data_cache["last_load"] = time.time()
+        
     except Exception as e:
         logger.error(f"Ошибка сохранения данных: {e}")
 
