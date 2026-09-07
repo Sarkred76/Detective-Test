@@ -3140,7 +3140,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await submenu(update, context)
             return
 
-        elif text == "🧪 Ивент":
+        elif text == "🧩 Ивент":
             await event_menu(update, context)
             return
 
@@ -8537,7 +8537,7 @@ async def submenu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             [KeyboardButton("👤 Личное дело")],
             [KeyboardButton("📜 Квесты"), KeyboardButton("🏰 Кланы")],
             [KeyboardButton("🛍️ Магазин"), KeyboardButton("🍺 Бар")],
-            [KeyboardButton("🧪 Ивент")],
+            [KeyboardButton("🧩 Ивент")],
             [KeyboardButton("🔙 Назад в главное меню")],
         ]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -11032,7 +11032,7 @@ async def finish_interrogation(update: Update, context: ContextTypes.DEFAULT_TYP
             [KeyboardButton("👤 Личное дело")],
             [KeyboardButton("📜 Квесты"), KeyboardButton("🏰 Кланы")],
             [KeyboardButton("🛍️ Магазин"), KeyboardButton("🍺 Бар")],
-            [KeyboardButton("🧪 Ивент")],
+            [KeyboardButton("🧩 Ивент")],
             [KeyboardButton("🔙 Назад в главное меню")],
         ]
         
