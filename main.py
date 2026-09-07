@@ -1090,6 +1090,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             response += "/remove_batpass [@никнейм] - отозвать Бэт-пасс\n"
             response += "/give_card_to_batpass [ID_карты] [количество] - выдать карту всем с Бэт-пассом\n"
             response += "/add_supercoins [@никнейм] [количество] - начислить супер-коины в бюджет клана\n"
+            response += "/reset_event_all confirm - сбросить прохождение ивента у всех\n"
             
             
         response += "💡 Нужна помощь?\n"
@@ -12045,7 +12046,61 @@ async def start_new_season(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         logger.error(f"Ошибка start_new_season: {e}")
         await update.message.reply_text("❌ Ошибка при начале нового сезона")
 
-
+async def reset_event_all(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Сбрасывает прохождение ивента у ВСЕХ игроков."""
+    try:
+        data = load_data()
+        user_id = str(update.effective_user.id)
+        
+        if not is_admin(user_id, data):
+            await update.message.reply_text("🚫 Только для администратора!")
+            return
+        
+        users = data.get("users", {})
+        if not users:
+            await update.message.reply_text("⚠️ Нет зарегистрированных игроков!")
+            return
+        
+        # ⭐ Подтверждение ⭐
+        if not context.args or context.args[0].lower() != "confirm":
+            await update.message.reply_text(
+                "⚠️ <b>ВНИМАНИЕ! Это действие затронет ВСЕХ игроков!</b>\n\n"
+                "📋 Будет сброшено:\n"
+                "• 🎩 Прохождение ивента (event_completed) → False\n\n"
+                "💡 После сброса все игроки смогут заново пройти ивент "
+                "«Допрос Пугало» и получить награду.\n\n"
+                "Для подтверждения выполните:\n"
+                "<code>/reset_event_all confirm</code>",
+                parse_mode="HTML"
+            )
+            return
+        
+        # ⭐ Выполняем сброс ⭐
+        reset_count = 0
+        
+        for uid, udata in users.items():
+            if udata.get("event_completed", False):
+                udata["event_completed"] = False
+                reset_count += 1
+        
+        save_data(data)
+        
+        await update.message.reply_text(
+            f"✅ <b>Прохождение ивента сброшено!</b>\n\n"
+            f"👥 Игроков обработано: {len(users)}\n"
+            f"🔄 Сброшено прохождений: {reset_count}\n\n"
+            f"🎩 Теперь все игроки могут заново пройти ивент!",
+            parse_mode="HTML"
+        )
+        
+        logger.info(
+            f"Админ {user_id} сбросил прохождение ивента у {reset_count} игроков "
+            f"(из {len(users)} всего)"
+        )
+        
+    except Exception as e:
+        logger.error(f"Ошибка reset_event_all: {e}")
+        await update.message.reply_text("❌ Ошибка при сбросе ивента")
 
 # ===== ЗАПУСК БОТА =====
 
@@ -12116,6 +12171,7 @@ def main() -> None:
             CommandHandler("give_card_to_batpass", give_card_to_batpass),
             CommandHandler("add_supercoins", add_supercoins_to_clan),
             CommandHandler("start_new_season", start_new_season),
+            CommandHandler("reset_event_all", reset_event_all),
             MessageHandler(filters.PHOTO | filters.VIDEO | filters.ANIMATION, handle_message),
             MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message),
             CallbackQueryHandler(mycards_callback, pattern=r"^(mycards_|barracks_|card_).*"),
