@@ -11013,7 +11013,7 @@ async def finish_interrogation(update: Update, context: ContextTypes.DEFAULT_TYP
                     f"📋 <b>Что вы узнали:</b>\n"
                     f"• 💥 Метрополис взорван. Харли сбежала. Супермен убил Лоис Лейн\n\n"
                     f"🎁 <b>Награда:</b>\n"
-                    f"• 🃏 Harley Queen (Nurse) "Injustice"\n"
+                    f"• 🃏 Harley Queen (Nurse) «Injustice»\n"
                     f"• 🖼 Новая аватарка"
                 )
                 
