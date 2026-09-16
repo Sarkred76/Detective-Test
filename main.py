@@ -84,6 +84,18 @@ DEFAULT_CLAN_AVATAR = None  # None означает отсутствие ава�
 MENU_IMAGE = "https://files.catbox.moe/zj1vl8.jpg"
 QUESTS_IMAGE = "https://files.catbox.moe/0k82du.jpg"
 
+# ===== ОБМЕН КАРТ INJUSTICE =====
+# ID карт, которые нужно обменять (по 1 копии каждой)
+INJUSTICE_EXCHANGE_CARDS = [
+    1,  # ⭐ ЗАМЕНИТЕ НА ID Harley Queen (Nurse) "Injustice"
+    2,  # ⭐ ЗАМЕНИТЕ НА ID Scarecrow "Injustice"
+    3,  # ⭐ ЗАМЕНИТЕ НА ID Mad Hatter "Injustice"
+    4,  # ⭐ ЗАМЕНИТЕ НА ID Riddler "Injustice"
+]
+
+# ID новой Limited карты, которую получает игрок
+INJUSTICE_REWARD_CARD_ID = 105  # ⭐ ЗАМЕНИТЕ НА ID новой Limited карты
+
 # ===== ИВЕНТ: ДОПРОС Харли =====
 EVENT_REWARD_CARD_ID = 100  # ⭐ ВАШ ID КАРТЫ-НАГРАДЫ
 
@@ -519,6 +531,8 @@ def migrate_data(data: Dict) -> Dict:
             user_data["event_completed"] = False
         if "event_completed_at" not in user_data:
             user_data["event_completed_at"] = 0
+        if "injustice_exchanged" not in user_data:
+            user_data["injustice_exchanged"] = False
 
     # ⭐ Миграция карт (ВЫНЕСЕНА ИЗ ЦИКЛА ПОЛЬЗОВАТЕЛЕЙ!) ⭐
     for card in data.get("cards", []):
@@ -10659,21 +10673,27 @@ async def event_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         
         # ⭐ Проверяем, завершён ли ивент ⭐
         if user_data.get("event_completed", False):
-            keyboard = [
-            [KeyboardButton("👤 Личное дело")],
-            [KeyboardButton("📜 Квесты"), KeyboardButton("🏰 Кланы")],
-            [KeyboardButton("🛍️ Магазин"), KeyboardButton("🍺 Бар")],
-            [KeyboardButton("🃏 Ивент")],
-            [KeyboardButton("🔙 Назад в главное меню")],
-        ]
-            await update.message.reply_text(
-                "🃏 <b>Ивент</b>\n\n"
-                "🔒 <b>Следующего подозреваемого приведут через неделю!</b>\n\n"
-                "Ожидайте новых расследований...",
-                reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
-                parse_mode="HTML"
-            )
-            return
+            if user_data.get("injustice_exchanged", False):
+                keyboard = [
+                    [KeyboardButton("👤 Личное дело")],
+                    [KeyboardButton("📜 Квесты"), KeyboardButton("🏰 Кланы")],
+                    [KeyboardButton("🛍️ Магазин"), KeyboardButton("🍺 Бар")],
+                    [KeyboardButton("🃏 Ивент")],
+                    [KeyboardButton("🔙 Назад в главное меню")],
+                ]
+                await update.message.reply_text(
+                    "🎩 <b>Ивент</b>\n\n"
+                    "🔒 <b>Ивент завершён!</b>\n\n"
+                    "Вы уже прошли допрос и обменяли карты Injustice.\n"
+                    "Ожидайте новых расследований...",
+                    reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
+                    parse_mode="HTML"
+                )
+                return
+            else:
+                # ⭐ Ивент пройден, но обмен ещё не был — показываем окно обмена ⭐
+                await show_injustice_exchange(update, context)
+                return
         
         # ⭐ Ивент доступен ⭐
         intro_text = (
@@ -10699,6 +10719,345 @@ async def event_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     except Exception as e:
         logger.error(f"Ошибка в event_menu: {e}")
         await update.message.reply_text("❌ Ошибка при открытии ивента")
+
+async def show_injustice_exchange(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Показывает окно обмена карт Injustice."""
+    try:
+        user_id = str(update.effective_user.id)
+        data = load_data()
+        user_data = data["users"].get(user_id)
+        
+        if not user_data:
+            await update.message.reply_text("❌ Профиль не найден!")
+            return
+        
+        # ⭐ Проверяем наличие карт ⭐
+        user_cards = user_data.get("cards", [])
+        card_status = []
+        all_cards_present = True
+        
+        for card_id in INJUSTICE_EXCHANGE_CARDS:
+            card = find_card_by_id(card_id, data["cards"])
+            if not card:
+                card_status.append({
+                    "name": f"Карта #{card_id} (не найдена)",
+                    "present": False,
+                    "count": 0
+                })
+                all_cards_present = False
+                continue
+            
+            count = user_cards.count(card_id)
+            present = count > 0
+            if not present:
+                all_cards_present = False
+            
+            card_status.append({
+                "name": card.get("title", "Без названия"),
+                "present": present,
+                "count": count
+            })
+        
+        # ⭐ Формируем текст ⭐
+        text = (
+            "🎁 <b>Обмен картами Injustice</b>\n\n"
+            "Вы можете обменять следующие карты:\n\n"
+        )
+        
+        for status in card_status:
+            emoji = "✅" if status["present"] else "❌"
+            count_text = f" (у вас: {status['count']})" if status["count"] > 1 else ""
+            text += f"{emoji} {status['name']}{count_text}\n"
+        
+        text += "\nНа новую <b>Limited</b> карту!\n\n"
+        
+        if not all_cards_present:
+            # ⭐ Не хватает каких-то карт ⭐
+            missing_cards = [s["name"] for s in card_status if not s["present"]]
+            text += "⚠️ <b>Вам не хватает карт:</b>\n"
+            for missing in missing_cards:
+                text += f"• {missing}\n"
+        
+        # ⭐ Формируем клавиатуру ⭐
+        keyboard = []
+        if all_cards_present:
+            keyboard.append([
+                InlineKeyboardButton("🔄 Обмен", callback_data="injustice_exchange_start")
+            ])
+        else:
+            keyboard.append([
+                InlineKeyboardButton(
+                    "❌ Недостаточно карт для обмена",
+                    callback_data="injustice_exchange_no_cards"
+                )
+            ])
+        
+        keyboard.append([
+            InlineKeyboardButton("❌ Закрыть", callback_data="injustice_exchange_close")
+        ])
+        
+        await update.message.reply_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+        
+    except Exception as e:
+        logger.error(f"Ошибка show_injustice_exchange: {e}")
+        await update.message.reply_text("❌ Ошибка при открытии окна обмена")
+
+async def injustice_exchange_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Показывает подтверждение обмена."""
+    try:
+        query = update.callback_query
+        user_id = str(query.from_user.id)
+        data = load_data()
+        user_data = data["users"].get(user_id)
+        
+        if not user_data:
+            await query.answer("❌ Профиль не найден!", show_alert=True)
+            return
+        
+        # ⭐ Проверяем, что все карты всё ещё есть ⭐
+        user_cards = user_data.get("cards", [])
+        for card_id in INJUSTICE_EXCHANGE_CARDS:
+            if user_cards.count(card_id) < 1:
+                await query.answer("❌ У вас больше нет всех необходимых карт!", show_alert=True)
+                return
+        
+        text = (
+            "⚠️ <b>Подтверждение обмена</b>\n\n"
+            "Вы собираетесь обменять <b>4 карты</b> на новую <b>Limited</b> карту.\n\n"
+            "⚠️ <b>Это действие нельзя отменить!</b>\n\n"
+            "Будут удалены:\n"
+        )
+        
+        for card_id in INJUSTICE_EXCHANGE_CARDS:
+            card = find_card_by_id(card_id, data["cards"])
+            if card:
+                text += f"• {card.get('title', 'Без названия')}\n"
+        
+        text += "\n✅ Подтвердить обмен?"
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ Подтвердить", callback_data="injustice_exchange_execute"),
+                InlineKeyboardButton("❌ Отказаться", callback_data="injustice_exchange_cancel")
+            ]
+        ]
+        
+        try:
+            await query.edit_message_text(
+                text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            if "Message is not modified" not in str(e):
+                logger.error(f"Ошибка injustice_exchange_confirm: {e}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка injustice_exchange_confirm: {e}")
+        await query.answer("❌ Ошибка", show_alert=True)
+
+async def injustice_exchange_execute(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Выполняет обмен карт."""
+    try:
+        query = update.callback_query
+        user_id = str(query.from_user.id)
+        data = load_data()
+        user_data = data["users"].get(user_id)
+        
+        if not user_data:
+            await query.answer("❌ Профиль не найден!", show_alert=True)
+            return
+        
+        # ⭐ Проверяем, что обмен ещё не был ⭐
+        if user_data.get("injustice_exchanged", False):
+            await query.answer("❌ Вы уже обменяли карты!", show_alert=True)
+            return
+        
+        # ⭐ Проверяем, что все карты есть ⭐
+        user_cards = user_data.get("cards", [])
+        for card_id in INJUSTICE_EXCHANGE_CARDS:
+            if user_cards.count(card_id) < 1:
+                await query.answer("❌ У вас больше нет всех необходимых карт!", show_alert=True)
+                return
+        
+        # ⭐ Удаляем по 1 копии каждой карты ⭐
+        removed_cards = []
+        for card_id in INJUSTICE_EXCHANGE_CARDS:
+            user_data["cards"].remove(card_id)
+            card = find_card_by_id(card_id, data["cards"])
+            if card:
+                removed_cards.append(card.get("title", "Без названия"))
+        
+        # ⭐ Добавляем новую Limited карту ⭐
+        new_card = find_card_by_id(INJUSTICE_REWARD_CARD_ID, data["cards"])
+        if not new_card:
+            await query.answer("❌ Новая карта не найдена!", show_alert=True)
+            return
+        
+        user_data["cards"].append(INJUSTICE_REWARD_CARD_ID)
+        
+        # ⭐ Помечаем обмен как выполненный ⭐
+        user_data["injustice_exchanged"] = True
+        save_data(data)
+        
+        # ⭐ Формируем caption для новой карты ⭐
+        caption = generate_card_caption(new_card, user_data, count=1, show_bonus=False)
+        caption += "\n\n🎁 <i>Получена в обмен на карты Injustice</i>"
+        
+        # ⭐ Отправляем сообщение об успехе ⭐
+        success_text = (
+            "✅ <b>Обмен выполнен!</b>\n\n"
+            "🗑️ <b>Удалены карты:</b>\n"
+        )
+        for card_name in removed_cards:
+            success_text += f"• {card_name}\n"
+        
+        success_text += f"\n🎁 <b>Получена карта:</b> {new_card.get('title', 'Без названия')}\n"
+        success_text += f"🌟 <b>Редкость:</b> {new_card.get('rarity', 'Unknown')}"
+        
+        try:
+            await query.edit_message_text(
+                success_text,
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            if "Message is not modified" not in str(e):
+                logger.error(f"Ошибка отправки сообщения: {e}")
+        
+        # ⭐ Отправляем новую карту отдельным сообщением ⭐
+        await send_card(query, new_card, context, caption=caption)
+        
+        await query.answer("✅ Обмен выполнен!", show_alert=False)
+        logger.info(f"Игрок {user_id} обменял карты Injustice на карту #{INJUSTICE_REWARD_CARD_ID}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка injustice_exchange_execute: {e}")
+        await query.answer("❌ Ошибка при обмене", show_alert=True)
+
+async def injustice_exchange_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Отмена обмена — возврат в окно обмена."""
+    try:
+        query = update.callback_query
+        await query.answer("❌ Обмен отменён", show_alert=False)
+        
+        # ⭐ Возвращаемся в окно обмена ⭐
+        user_id = str(query.from_user.id)
+        data = load_data()
+        user_data = data["users"].get(user_id)
+        
+        if not user_data:
+            return
+        
+        # ⭐ Проверяем наличие карт ⭐
+        user_cards = user_data.get("cards", [])
+        card_status = []
+        all_cards_present = True
+        
+        for card_id in INJUSTICE_EXCHANGE_CARDS:
+            card = find_card_by_id(card_id, data["cards"])
+            if not card:
+                card_status.append({
+                    "name": f"Карта #{card_id} (не найдена)",
+                    "present": False,
+                    "count": 0
+                })
+                all_cards_present = False
+                continue
+            
+            count = user_cards.count(card_id)
+            present = count > 0
+            if not present:
+                all_cards_present = False
+            
+            card_status.append({
+                "name": card.get("title", "Без названия"),
+                "present": present,
+                "count": count
+            })
+        
+        # ⭐ Формируем текст ⭐
+        text = (
+            "🎁 <b>Обмен картами Injustice</b>\n\n"
+            "Вы можете обменять следующие карты:\n\n"
+        )
+        
+        for status in card_status:
+            emoji = "✅" if status["present"] else "❌"
+            count_text = f" (у вас: {status['count']})" if status["count"] > 1 else ""
+            text += f"{emoji} {status['name']}{count_text}\n"
+        
+        text += "\nНа новую <b>Limited</b> карту!\n\n"
+        
+        if not all_cards_present:
+            missing_cards = [s["name"] for s in card_status if not s["present"]]
+            text += "⚠️ <b>Вам не хватает карт:</b>\n"
+            for missing in missing_cards:
+                text += f"• {missing}\n"
+        
+        # ⭐ Формируем клавиатуру ⭐
+        keyboard = []
+        if all_cards_present:
+            keyboard.append([
+                InlineKeyboardButton("🔄 Обмен", callback_data="injustice_exchange_start")
+            ])
+        else:
+            keyboard.append([
+                InlineKeyboardButton(
+                    "❌ Недостаточно карт для обмена",
+                    callback_data="injustice_exchange_no_cards"
+                )
+            ])
+        
+        keyboard.append([
+            InlineKeyboardButton("❌ Закрыть", callback_data="injustice_exchange_close")
+        ])
+        
+        try:
+            await query.edit_message_text(
+                text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            if "Message is not modified" not in str(e):
+                logger.error(f"Ошибка injustice_exchange_cancel: {e}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка injustice_exchange_cancel: {e}")
+        await query.answer("❌ Ошибка", show_alert=True)
+
+
+async def injustice_exchange_no_cards(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработчик неактивной кнопки 'Недостаточно карт'."""
+    try:
+        query = update.callback_query
+        await query.answer("❌ У вас нет всех необходимых карт для обмена!", show_alert=True)
+    except Exception as e:
+        logger.error(f"Ошибка injustice_exchange_no_cards: {e}")
+
+
+async def injustice_exchange_close(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Закрывает окно обмена."""
+    try:
+        query = update.callback_query
+        await query.answer("✅ Окно закрыто", show_alert=False)
+        
+        try:
+            await query.edit_message_text(
+                "✅ <b>Окно обмена закрыто.</b>\n\n"
+                "Вы можете вернуться к нему через кнопку «🎩 Ивент».",
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            if "Message is not modified" not in str(e):
+                logger.error(f"Ошибка injustice_exchange_close: {e}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка injustice_exchange_close: {e}")
 
 async def start_interrogation(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Начинает допрос Безумного Шляпника."""
@@ -12240,6 +12599,11 @@ def main() -> None:
             CallbackQueryHandler(clan_shop_back_to_menu, pattern=r"^clan_shop_back_to_menu$"),
             CallbackQueryHandler(clan_shop_no_coins, pattern=r"^clan_shop_no_coins$"),
             CallbackQueryHandler(clan_shop_cancel, pattern=r"^clan_shop_cancel$"),
+            CallbackQueryHandler(injustice_exchange_confirm, pattern=r"^injustice_exchange_start$"),
+            CallbackQueryHandler(injustice_exchange_execute, pattern=r"^injustice_exchange_execute$"),
+            CallbackQueryHandler(injustice_exchange_cancel, pattern=r"^injustice_exchange_cancel$"),
+            CallbackQueryHandler(injustice_exchange_no_cards, pattern=r"^injustice_exchange_no_cards$"),
+            CallbackQueryHandler(injustice_exchange_close, pattern=r"^injustice_exchange_close$"),
         ]
 
         for handler in handlers:
