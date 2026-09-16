@@ -10928,8 +10928,34 @@ async def injustice_exchange_execute(update: Update, context: ContextTypes.DEFAU
             if "Message is not modified" not in str(e):
                 logger.error(f"Ошибка отправки сообщения: {e}")
         
-        # ⭐ Отправляем новую карту отдельным сообщением ⭐
-        await send_card(query, new_card, context, caption=caption)
+        # ⭐ ИСПРАВЛЕНИЕ: Отправляем карту напрямую с полным caption ⭐
+        chat_id = query.message.chat_id
+        media_source = new_card.get("media_source", "url")
+        media_value = new_card.get("file_id") if media_source == "file_id" else new_card.get("image_url", "")
+
+        if not media_value:
+            await query.answer("❌ У карты нет медиа-файла!", show_alert=True)
+            return
+
+        try:
+            if new_card.get("media_type") == "animation" or (isinstance(media_value, str) and media_value.lower().endswith((".mp4", ".webm", ".gif"))):
+                await context.bot.send_video(
+                    chat_id=chat_id,
+                    video=media_value,
+                    caption=caption,
+                    parse_mode="HTML",
+                    supports_streaming=True
+                )
+            else:
+                await context.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=media_value,
+                    caption=caption,
+                    parse_mode="HTML"
+                )
+        except Exception as send_error:
+            logger.error(f"Ошибка отправки карты при обмене: {send_error}")
+            await query.answer("❌ Не удалось отправить карту", show_alert=True)
         
         await query.answer("✅ Обмен выполнен!", show_alert=False)
         logger.info(f"Игрок {user_id} обменял карты Injustice на карту #{INJUSTICE_REWARD_CARD_ID}")
