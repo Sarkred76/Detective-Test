@@ -85,7 +85,7 @@ MENU_IMAGE = "https://files.catbox.moe/zj1vl8.jpg"
 QUESTS_IMAGE = "https://files.catbox.moe/0k82du.jpg"
 
 # ===== ИВЕНТ: ДОПРОС Харли =====
-EVENT_REWARD_CARD_ID = 214  # ⭐ ВАШ ID КАРТЫ-НАГРАДЫ
+EVENT_REWARD_CARD_ID = 190  # ⭐ ВАШ ID КАРТЫ-НАГРАДЫ
 
 EVENT_MIN_CORRECT = 6
 
@@ -11012,6 +11012,9 @@ async def finish_interrogation(update: Update, context: ContextTypes.DEFAULT_TYP
                     f"🏆 <b>Ранг:</b> Великий детектив\n\n"
                     f"📋 <b>Что вы узнали:</b>\n"
                     f"• 💥 Метрополис взорван. Харли сбежала. Супермен убил Лоис Лейн\n\n"
+                    f"🎁 <b>Награда:</b>\n"
+                    f"• 🃏 Harley Queen (Nurse) "Injustice"\n"
+                    f"• 🖼 Новая аватарка"
                 )
                 
                 # ⭐ Отправляем результат ⭐
@@ -11032,6 +11035,9 @@ async def finish_interrogation(update: Update, context: ContextTypes.DEFAULT_TYP
                     f"🏆 <b>Ранг:</b> Великий детектив\n\n"
                     f"📋 <b>Что вы узнали:</b>\n"
                     f"• 💥 Метрополис взорван. Харли сбежала. Супермен убил Лоис Лейн\n\n"
+                    f"🎁 <b>Награда:</b>\n"
+                    f"• ⚠️ Карта не найдена (проверьте EVENT_REWARD_CARD_ID)\n"
+                    f"• 🖼 Новая аватарка"
                 )
                 
                 await update.message.reply_text(
@@ -11047,6 +11053,8 @@ async def finish_interrogation(update: Update, context: ContextTypes.DEFAULT_TYP
                     f"🏆 <b>Ранг:</b> Великий детектив\n\n"
                     f"📋 <b>Что вы узнали:</b>\n"
                     f"• 💥 Метрополис взорван. Харли сбежала. Супермен убил Лоис Лейн\n\n"
+                    f"🎁 <b>Награда:</b>\n"
+                    f"• 🖼 Новая аватарка"
                 )
             
             await update.message.reply_text(
