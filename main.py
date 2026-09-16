@@ -10684,8 +10684,7 @@ async def event_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
                 await update.message.reply_text(
                     "🎩 <b>Ивент</b>\n\n"
                     "🔒 <b>Ивент завершён!</b>\n\n"
-                    "Вы уже прошли допрос и обменяли карты Injustice.\n"
-                    "Ожидайте новых расследований...",
+                    "Вы уже прошли допрос и обменяли карты Injustice.\n",
                     reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
                     parse_mode="HTML"
                 )
