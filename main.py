@@ -85,7 +85,7 @@ MENU_IMAGE = "https://files.catbox.moe/zj1vl8.jpg"
 QUESTS_IMAGE = "https://files.catbox.moe/0k82du.jpg"
 
 # ===== ИВЕНТ: ДОПРОС Харли =====
-EVENT_REWARD_CARD_ID = 190  # ⭐ ВАШ ID КАРТЫ-НАГРАДЫ
+EVENT_REWARD_CARD_ID = 100  # ⭐ ВАШ ID КАРТЫ-НАГРАДЫ
 
 EVENT_MIN_CORRECT = 6
 
