@@ -71,7 +71,7 @@ ADD_CARD_WAITING_MEDIA = "add_card_waiting_media"
 ADD_CARD_WAITING_TITLE = "add_card_waiting_title"
 ADD_CARD_WAITING_RARITY = "add_card_waiting_rarity"
 ADD_CARD_WAITING_CATCHPHRASE = "add_card_waiting_catchphrase"
-ADD_CARD_WAITING_CLASSIC = "add_card_waiting_classic" 
+ADD_CARD_WAITING_UNIVERSE = "add_card_waiting_universe"
 
 # ===== АВАТАРКИ =====
 DEFAULT_AVATAR_URL = "https://files.catbox.moe/xtviqr.jpg" 
@@ -550,10 +550,16 @@ def migrate_data(data: Dict) -> Dict:
         if "injustice_exchanged" not in user_data:
             user_data["injustice_exchanged"] = False
 
-    # ⭐ Миграция карт (ВЫНЕСЕНА ИЗ ЦИКЛА ПОЛЬЗОВАТЕЛЕЙ!) ⭐
     for card in data.get("cards", []):
-        if "is_classic" not in card:
-            card["is_classic"] = False
+        # ⭐ Миграция: конвертируем is_classic в universe ⭐
+        if "universe" not in card:
+            if card.get("is_classic", True):
+                card["universe"] = "classic"
+            else:
+                card["universe"] = "none"
+            # Удаляем старое поле
+            if "is_classic" in card:
+                del card["is_classic"]
     
     return data
 
@@ -2875,27 +2881,44 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 catchphrase = None if text.lower() == "нет" else text
                 user_state["catchphrase"] = catchphrase
     
-                # ⭐ ПЕРЕХОДИМ К ВОПРОСУ ПРО CLASSIC ⭐
-                user_state["step"] = ADD_CARD_WAITING_CLASSIC
+                # ⭐ ПЕРЕХОДИМ К ВОПРОСУ ПРО ВСЕЛЕННУЮ ⭐
+                user_state["step"] = ADD_CARD_WAITING_UNIVERSE
     
                 await update.message.reply_text(
                     f"✅ Catchphrase: **{catchphrase or 'пропущено'}**\n\n"
-                    f"🏛 **Шаг 5/5:** Является ли эта карта Classic?\n\n"
-                    f"Ответьте **да** или **нет**\n\n"
+                    f"🌍 **Шаг 5/5:** К какой вселенной относится эта карта?\n\n"
+                    f"• **Classic** — классическая вселенная\n"
+                    f"• **Injustice** — вселенная Injustice\n"
+                    f"• **Нет** — обычная карта (не относится к вселенным)\n\n"
+                    f"Ответьте **Classic**, **Injustice** или **Нет**\n\n"
                     f"❌ Для отмены: /cancel",
                     parse_mode="Markdown"
                 )
                 return
-
-            # ⭐ НОВОЕ: Если ожидается ответ про Classic ⭐
-            if step == ADD_CARD_WAITING_CLASSIC:
+        
+            # ⭐ НОВОЕ: Если ожидается ответ про вселенную ⭐
+            if step == ADD_CARD_WAITING_UNIVERSE:
                 if text.lower() == "/cancel":
                     del context.user_data[user_id]
                     await update.message.reply_text("❌ Добавление карты отменено.")
                     return
     
                 # ⭐ Парсим ответ ⭐
-                is_classic = text.lower().strip() in ["да", "true", "1", "yes", "classic"]
+                universe_input = text.strip().lower()
+                if universe_input in ["classic", "классик"]:
+                    universe = "classic"
+                elif universe_input in ["injustice", "инджастис"]:
+                    universe = "injustice"
+                elif universe_input in ["нет", "no", "none", "обычная"]:
+                    universe = "none"
+                else:
+                    await update.message.reply_text(
+                        "❌ Неверный ответ!\n"
+                        "Ответьте **Classic**, **Injustice** или **Нет**\n\n"
+                        "❌ Для отмены: /cancel",
+                        parse_mode="Markdown"
+                    )
+                    return
     
                 # ⭐ ИСПРАВЛЕНИЕ 1: Заменяем \\n на реальный перенос строки ⭐
                 catchphrase_raw = user_state.get("catchphrase")
@@ -2917,7 +2940,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     "media_source": "file_id",
                     "file_id": user_state["file_id"],
                     "image_url": "",
-                    "is_classic": is_classic,
+                    "universe": universe,  # ⭐ НОВОЕ: поле universe ⭐
                 }
     
                 data["cards"].append(new_card)
@@ -2943,7 +2966,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     
                 # ⭐ Формируем текст ответа ⭐
                 catchphrase_text = f"💬 {catchphrase_escaped}" if catchphrase_escaped else ""
-                classic_text = "🏛 **Classic**" if is_classic else ""
+                universe_text = ""
+                if universe == "classic":
+                    universe_text = "🏛 **Classic**"
+                elif universe == "injustice":
+                    universe_text = "⚔️ **Injustice**"
     
                 result_text = (
                     f"✅ **Карточка #{new_id} добавлена!**\n"
@@ -2951,7 +2978,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     f"{catchphrase_text}\n"
                     f"🌟 {user_state['rarity']}\n"
                     f"📺 {'Анимация' if user_state['media_type'] == 'animation' else 'Фото'}\n"
-                    f"{classic_text}\n"
+                    f"{universe_text}\n"
                     f"📤 Источник: file\\_id"
                 )
     
@@ -2964,13 +2991,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 except Exception as e:
                     logger.warning(f"Ошибка отправки Markdown: {e}. Пробую без parse_mode.")
                     # Fallback: отправляем без парсинга
+                    universe_display = "Classic" if universe == "classic" else "Injustice" if universe == "injustice" else "Нет"
                     await update.message.reply_text(
                         f"✅ Карточка #{new_id} добавлена!\n"
                         f"🏷 {user_state['title']}\n"
                         f"💬 {user_state['catchphrase'] or ''}\n"
                         f"🌟 {user_state['rarity']}\n"
                         f"📺 {'Анимация' if user_state['media_type'] == 'animation' else 'Фото'}\n"
-                        f"🏛 Classic: {'Да' if is_classic else 'Нет'}\n"
+                        f"🌍 Вселенная: {universe_display}\n"
                         f"📤 Источник: file_id"
                     )
     
@@ -3888,8 +3916,8 @@ async def edit_card(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.message.reply_text(f"⚠️ Карта #{card_id} не найдена")
             return
         
-        # ⭐ ДОБАВЛЯЕМ classic В СПИСОК ДОПУСТИМЫХ ПАРАМЕТРОВ
-        valid_params = ["title", "url", "rarity", "available", "catchphrase", "classic"]
+        # ⭐ ДОБАВЛЯЕМ universe В СПИСОК ДОПУСТИМЫХ ПАРАМЕТРОВ ⭐
+        valid_params = ["title", "url", "rarity", "available", "catchphrase", "universe"]
         if param not in valid_params:
             await update.message.reply_text(
                 f"⚠️ Неверный параметр! Доступные: {', '.join(valid_params)}"
@@ -3904,12 +3932,26 @@ async def edit_card(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             display_new = new_value_bool
             display_old = old_value
             
-        # ⭐ НОВОЕ: ОБРАБОТКА ПАРАМЕТРА classic
-        elif param == "classic":
-            new_value_bool = new_value.lower() in ["да", "true", "1", "yes", "classic"]
-            card["is_classic"] = new_value_bool
-            display_new = "Да" if new_value_bool else "Нет"
-            display_old = "Да" if card.get("is_classic") else "Нет"
+        # ⭐ НОВОЕ: ОБРАБОТКА ПАРАМЕТРА universe ⭐
+        elif param == "universe":
+            universe_input = new_value.strip().lower()
+            if universe_input in ["classic", "классик"]:
+                new_universe = "classic"
+            elif universe_input in ["injustice", "инджастис"]:
+                new_universe = "injustice"
+            elif universe_input in ["нет", "no", "none", "обычная"]:
+                new_universe = "none"
+            else:
+                await update.message.reply_text(
+                    "⚠️ Неверное значение для universe!\n"
+                    "Доступные: **classic**, **injustice**, **нет**",
+                    parse_mode="Markdown"
+                )
+                return
+    
+            card["universe"] = new_universe
+            display_new = "Classic" if new_universe == "classic" else "Injustice" if new_universe == "injustice" else "Нет"
+            display_old = "Classic" if card.get("universe") == "classic" else "Injustice" if card.get("universe") == "injustice" else "Нет"
             
         elif param == "catchphrase":
             if new_value.lower() != "нет":
@@ -3976,7 +4018,7 @@ async def edit_card(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         
         save_data(data)
         
-        # ⭐ ФОРМИРУЕМ ОТВЕТ С УЧЁТОМ classic
+        # ⭐ ФОРМИРУЕМ ОТВЕТ С УЧЁТОМ universe ⭐
         response = (
             f"✅ **Карта #{card_id} обновлена!**\n"
             f"📝 Параметр: {param}\n"
@@ -3986,8 +4028,11 @@ async def edit_card(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             f"🌟 {card.get('rarity')}\n"
             f"{'✅ Включена' if card.get('available') else '❌ Выключена'}"
         )
-        if card.get("is_classic"):
+        universe = card.get("universe", "none")
+        if universe == "classic":
             response += "\n🏛 **Classic**"
+        elif universe == "injustice":
+            response += "\n⚔️ **Injustice**"
         if card.get("catchphrase"):
             response += f"\n💬 _\"{card['catchphrase']}\"_"
             
