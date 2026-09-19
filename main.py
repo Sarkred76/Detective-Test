@@ -553,7 +553,7 @@ def migrate_data(data: Dict) -> Dict:
     for card in data.get("cards", []):
         # ⭐ Миграция: конвертируем is_classic в universe ⭐
         if "universe" not in card:
-            if card.get("is_classic", True):
+            if card.get("is_classic", False):
                 card["universe"] = "classic"
             else:
                 card["universe"] = "none"
