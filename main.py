@@ -77,6 +77,9 @@ ADD_CARD_WAITING_CLASSIC = "add_card_waiting_classic"
 DEFAULT_AVATAR_URL = "https://files.catbox.moe/xtviqr.jpg" 
 SEASONAL_AVATAR_URL = "https://files.catbox.moe/502g93.jpg"
 SEASON_BOX_AVATAR_URL = "https://files.catbox.moe/24sc2b.jpg"
+FRIENDS_AVATAR_1_URL = "https://ibb.co/GQN89Nzn"
+FRIENDS_AVATAR_2_URL = "https://ibb.co/bx2cr1h"
+FRIENDS_AVATARS = [FRIENDS_AVATAR_1_URL, FRIENDS_AVATAR_2_URL]
 
 # ===== АВАТАРКА КЛАНА =====
 DEFAULT_CLAN_AVATAR = None  # None означает отсутствие аватарки (используется текст)
@@ -223,24 +226,37 @@ SUPER_COIN_REWARDS = {
 }
 
 # ===== МАГАЗИН КЛАНА =====
+EXCLUSIVE_EPIC_TU_CARD_ID = 105  # ⭐ ЗАМЕНИТЕ НА ID карты
 CLAN_SHOP_ITEMS = {
     "epic": {
         "name": "🎴 Рандомный Epic",
         "description": "Случайному участнику клана выдаётся случайная Epic-карта",
-        "price": 80,
+        "price": 50,
         "emoji": "🎴",
     },
     "rolls": {
         "name": "🎲 2 попытки каждому",
         "description": "Каждому участнику клана выдаётся 2 бесплатные попытки",
-        "price": 130,
+        "price": 70,
         "emoji": "🎲",
     },
     "cents": {
         "name": "💰 5000 бэт-коинов",
         "description": "Случайному участнику клана выдаётся 5000 бэт-коинов",
-        "price": 60,
+        "price": 30,
         "emoji": "💰",
+    },
+    "exclusive_epic_tu": {
+        "name": "✨ Эксклюзивный Epic Team-Up",
+        "description": "Случайному участнику клана выдаётся эксклюзивная Epic Team-Up карта",
+        "price": 200,
+        "emoji": "✨",
+    },
+    "friends_avatar": {
+        "name": "🎭 Эксклюзивная аватарка Friends",
+        "description": "Случайному участнику выдаётся одна из двух эксклюзивных аватарок Friends",
+        "price": 180,
+        "emoji": "🎭",
     },
 }
 
@@ -12161,6 +12177,132 @@ async def clan_shop_buy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                         f"🎁 <b>Бонус из магазина клана!</b>\n\n"
                         f"🏰 Клан: {html.escape(clan_name)}\n"
                         f"💰 Вам выдано: <b>+5000 бэт-коинов</b>"
+                    ),
+                    parse_mode="HTML"
+                )
+            except Exception as notify_error:
+                logger.warning(f"Не удалось уведомить {chosen_member_id}: {notify_error}")
+
+        # ⭐ НОВОЕ: Эксклюзивный Epic Team-Up ⭐
+        elif item_id == "exclusive_epic_tu":
+            # Проверяем, что карта существует
+            exclusive_card = find_card_by_id(EXCLUSIVE_EPIC_TU_CARD_ID, data["cards"])
+            if not exclusive_card:
+                await query.answer("❌ Эксклюзивная карта не найдена!", show_alert=True)
+                return
+    
+            # Выбираем случайного участника
+            chosen_member_id = random.choice(members)
+            member_data = data["users"].get(chosen_member_id, {})
+    
+            # Выдаём карту
+            member_data.setdefault("cards", []).append(EXCLUSIVE_EPIC_TU_CARD_ID)
+    
+            chosen_member_name = member_data.get("first_name", "Участник")
+            if member_data.get("last_name"):
+                chosen_member_name += f" {member_data['last_name']}"
+    
+            result_text = (
+                f"✨ <b>Эксклюзивный Epic Team-Up выдан!</b>\n\n"
+                f"🃏 Карта: <b>{html.escape(exclusive_card['title'])}</b>\n"
+                f"🌟 Редкость: Epic Team-Up\n"
+                f"👤 Получил: <b>{html.escape(chosen_member_name)}</b>\n"
+            )
+    
+            # ⭐ Уведомляем получателя ⭐
+            try:
+                caption = generate_card_caption(exclusive_card, member_data, count=1, show_bonus=False)
+                caption += "\n\n🏰 <i>Награда из магазина клана</i>"
+        
+                await context.bot.send_message(
+                    chat_id=int(chosen_member_id),
+                    text=(
+                        f"🎁 <b>Вам выдана карта из магазина клана!</b>\n\n"
+                        f"🏰 Клан: {html.escape(clan_name)}\n"
+                        f"🃏 Карта: <b>{html.escape(exclusive_card['title'])}</b>\n"
+                        f"🌟 Редкость: Epic Team-Up\n\n"
+                        f"✨ <i>Эксклюзивная награда!</i>"
+                    ),
+                    parse_mode="HTML"
+                )
+            except Exception as notify_error:
+                logger.warning(f"Не удалось уведомить {chosen_member_id}: {notify_error}")
+
+        # ⭐ НОВОЕ: Эксклюзивные аватарки Friends ⭐
+        elif item_id == "friends_avatar":
+            # ⭐ Собираем участников, которым можно выдать аватарку ⭐
+            eligible_members = []
+            for member_id in members:
+                member_data = data["users"].get(member_id, {})
+                member_avatars = member_data.get("avatars", [])
+        
+                # Проверяем, есть ли у игрока хотя бы одна из двух аватарок
+                has_avatar_1 = FRIENDS_AVATAR_1_URL in member_avatars
+                has_avatar_2 = FRIENDS_AVATAR_2_URL in member_avatars
+        
+                # Если у игрока нет хотя бы одной аватарки — он подходит
+                if not (has_avatar_1 and has_avatar_2):
+                    eligible_members.append(member_id)
+    
+            # ⭐ Если все участники уже имеют обе аватарки — покупка не проходит ⭐
+            if not eligible_members:
+                await query.answer(
+                    "❌ У всех участников клана уже есть эксклюзивные аватарки Friends!",
+                    show_alert=True
+                )
+                # ⭐ НЕ списываем супер-коины — просто выходим ⭐
+                return
+    
+            # ⭐ Выбираем случайного подходящего участника ⭐
+            chosen_member_id = random.choice(eligible_members)
+            member_data = data["users"].get(chosen_member_id, {})
+    
+            if "avatars" not in member_data:
+                member_data["avatars"] = []
+    
+            # ⭐ Определяем, какую аватарку выдать ⭐
+            has_avatar_1 = FRIENDS_AVATAR_1_URL in member_data["avatars"]
+            has_avatar_2 = FRIENDS_AVATAR_2_URL in member_data["avatars"]
+    
+            if has_avatar_1 and not has_avatar_2:
+                # У игрока есть первая — выдаём вторую
+                chosen_avatar = FRIENDS_AVATAR_2_URL
+                avatar_name = "Friends #2"
+            elif has_avatar_2 and not has_avatar_1:
+                # У игрока есть вторая — выдаём первую
+                chosen_avatar = FRIENDS_AVATAR_1_URL
+                avatar_name = "Friends #1"
+            else:
+                # У игрока нет ни одной — выбираем случайно
+                chosen_avatar = random.choice(FRIENDS_AVATARS)
+                avatar_name = "Friends #1" if chosen_avatar == FRIENDS_AVATAR_1_URL else "Friends #2"
+    
+            # ⭐ Добавляем аватарку в коллекцию (НЕ меняем текущую) ⭐
+            member_data["avatars"].append(chosen_avatar)
+    
+            chosen_member_name = member_data.get("first_name", "Участник")
+            if member_data.get("last_name"):
+                chosen_member_name += f" {member_data['last_name']}"
+    
+            result_text = (
+                f"🎭 <b>Эксклюзивная аватарка выдана!</b>\n\n"
+                f"🖼 Аватарка: <b>{avatar_name}</b>\n"
+                f"👤 Получил: <b>{html.escape(chosen_member_name)}</b>\n\n"
+                f"💡 <i>Аватарка добавлена в коллекцию. "
+                f"Игрок может выбрать её в настройках профиля.</i>\n"
+            )
+    
+            # ⭐ Уведомляем получателя ⭐
+            try:
+                await context.bot.send_photo(
+                    chat_id=int(chosen_member_id),
+                    photo=chosen_avatar,
+                    caption=(
+                        f"🎁 <b>Награда из магазина клана!</b>\n\n"
+                        f"🏰 Клан: {html.escape(clan_name)}\n"
+                        f"🎭 Вам выдана эксклюзивная аватарка: <b>{avatar_name}</b>\n\n"
+                        f"💡 <i>Аватарка добавлена в вашу коллекцию. "
+                        f"Вы можете выбрать её в настройках профиля.</i>"
                     ),
                     parse_mode="HTML"
                 )
