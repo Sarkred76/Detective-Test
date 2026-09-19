@@ -479,6 +479,10 @@ def migrate_data(data: Dict) -> Dict:
     if "user_clan" not in data:
         data["user_clan"] = {}
 
+    # ⭐ НОВОЕ: Режим техработ ⭐
+    if "maintenance_mode" not in data:
+        data["maintenance_mode"] = False
+
     # ⭐ Миграция пользователей ⭐
     for user_id, user_data in data.get("users", {}).items():
         if "clan_invite_pending" not in user_data:
@@ -702,6 +706,9 @@ def is_admin(user_id: str, data: Dict[str, Any]) -> bool:
     admins = data.get("admins", [])
     return user_id in admins
 
+def is_bot_disabled(data: Dict) -> bool:
+    """Проверяет, включён ли режим техработ."""
+    return data.get("maintenance_mode", False)
 
 def find_card_by_id(card_id: int, cards: List[Dict]) -> Optional[Dict]:
     """Находит карточку по ID."""
@@ -949,6 +956,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         user_id = str(update.effective_user.id)
         data = load_data()
+
+        if is_bot_disabled(data) and not is_admin(user_id, data):
+            await update.message.reply_text(
+                "🔧 <b>Ведутся технические работы</b>\n\n"
+                "Бот временно недоступен.\n"
+                "Пожалуйста, попробуйте позже.",
+                parse_mode="HTML"
+            )
+            return
         
         # Инициализация пользователя, если его нет
         if user_id not in data["users"]:
@@ -1116,8 +1132,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             response += "/add_supercoins [@никнейм] [количество] - начислить супер-коины в бюджет клана\n"
             response += "/reset_event_all confirm - сбросить прохождение ивента у всех\n"
             response += "/add_injustice_points [@никнейм] [сторона] [очки]- выдать очки противостояния стороне\n"
-            
-            
+            response += "/maintenance - включить режим тех работ\n"    
             
         response += "💡 Нужна помощь?\n"
         response += "Напишите администратору бота."
@@ -2690,6 +2705,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     try:
         user_id = str(update.effective_user.id)
         text = update.message.text if update.message else None
+
+        # ⭐ НОВОЕ: Проверка режима техработ ⭐
+        data = load_data()
+        if is_bot_disabled(data) and not is_admin(user_id, data):
+            await update.message.reply_text(
+                "🔧 <b>Ведутся технические работы</b>\n\n"
+                "Бот временно недоступен.\n"
+                "Пожалуйста, попробуйте позже.",
+                parse_mode="HTML"
+            )
+            return
 
         # ⭐ ОБРАБОТКА ФОТО ДЛЯ УСТАНОВКИ АВАТАРКИ КЛАНА ⭐
         if update.message.photo and user_id in context.user_data:
@@ -13305,6 +13331,33 @@ async def add_injustice_points_command(update: Update, context: ContextTypes.DEF
         logger.error(f"Ошибка add_injustice_points_command: {e}")
         await update.message.reply_text("❌ Ошибка при изменении очков Противостояния")
 
+async def maintenance_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Включает/выключает режим техработ (только для админов)."""
+    try:
+        data = load_data()
+        user_id = str(update.effective_user.id)
+        
+        if not is_admin(user_id, data):
+            await update.message.reply_text("🚫 Только для администратора!")
+            return
+        
+        # ⭐ Переключаем режим ⭐
+        data["maintenance_mode"] = not data.get("maintenance_mode", False)
+        save_data(data)
+        
+        new_state = data["maintenance_mode"]
+        emoji = "🔧" if new_state else "✅"
+        text = (
+            f"{emoji} <b>Режим техработ {'ВКЛЮЧЁН' if new_state else 'ВЫКЛЮЧЕН'}</b>\n\n"
+            f"{'🚫 Бот теперь отвечает только администраторам.' if new_state else '✅ Бот снова работает для всех игроков.'}"
+        )
+        
+        await update.message.reply_text(text, parse_mode="HTML")
+        logger.info(f"Админ {user_id} {'включил' if new_state else 'выключил'} режим техработ")
+        
+    except Exception as e:
+        logger.error(f"Ошибка maintenance_command: {e}")
+        await update.message.reply_text("❌ Ошибка при переключении режима")
 
 # ===== ЗАПУСК БОТА =====
 
@@ -13378,6 +13431,7 @@ def main() -> None:
             CommandHandler("reset_event_all", reset_event_all),
             CommandHandler("injustice", injustice_command),
             CommandHandler("add_injustice_points", add_injustice_points_command),
+            CommandHandler("maintenance", maintenance_command),
             MessageHandler(filters.PHOTO | filters.VIDEO | filters.ANIMATION, handle_message),
             MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message),
             CallbackQueryHandler(mycards_callback, pattern=r"^(mycards_|barracks_|card_).*"),
