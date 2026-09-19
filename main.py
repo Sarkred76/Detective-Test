@@ -9370,7 +9370,7 @@ WEEKLY_QUESTS_POOL = [
     {
         "id": "weekly_epic_tu_1",
         "desc": "Получить карту редкости Epic Team-up через «Получить досье»",
-        "reward_type": "super-coins",
+        "reward_type": "super_coins",
         "reward_amount": 5,
         "target": 1
     },
@@ -9437,7 +9437,19 @@ async def update_weekly_quest_progress(
                 elif quest["reward_type"] == "rep_points":
                     user_data["season_points"] = user_data.get("season_points", 0) + quest["reward_amount"]
                     user_data["total_points"] = user_data.get("total_points", 0) + quest["reward_amount"]
-                
+                elif quest["reward_type"] == "super_coins":
+                    clan_id = get_user_clan(user_id, data)
+                    if clan_id:
+                        clan = data["clans"].get(clan_id)
+                        if clan:
+                            clan["super_coins"] = clan.get("super_coins", 0) + quest["reward_amount"]
+                            # ⭐ Начисляем очки Противостояния ⭐
+                            add_injustice_points_to_clan(clan_id, quest["reward_amount"], data)
+                            logger.info(f"Клан {clan.get('name')} получил {quest['reward_amount']} супер-коинов за еженедельный квест {quest_id}")
+                        else:
+                            logger.warning(f"Клан {clan_id} не найден при начислении супер-коинов")
+                    else:
+                        logger.info(f"Игрок {user_id} выполнил еженедельный квест на супер-коины, но не состоит в клане. Награда пропущена.")
                 changed = True
                 save_data(data)
                 
@@ -9449,7 +9461,26 @@ async def update_weekly_quest_progress(
                     reward_text = f"{quest['reward_amount']} бесплатных попыток 🔍"
                 elif quest["reward_type"] == "rep_points":
                     reward_text = f"{quest['reward_amount']} очков репутации 💥"
-                
+                elif quest["reward_type"] == "super_coins":
+                    amount = quest["reward_amount"]
+                    n = amount % 100
+                    n1 = n % 10
+                    if n > 10 and n < 20:
+                        word = "супер-коинов"
+                    elif n1 > 1 and n1 < 5:
+                        word = "супер-коина"
+                    elif n1 == 1:
+                        word = "супер-коин"
+                    else:
+                        word = "супер-коинов"
+    
+                    clan_id = get_user_clan(user_id, data)
+                    if clan_id:
+                        clan = data["clans"].get(clan_id)
+                        clan_name = clan.get("name", "ваш клан") if clan else "ваш клан"
+                        reward_text = f"{amount} {word} в бюджет клана «{clan_name}» 🪙"
+                    else:
+                        reward_text = f"{amount} {word} (не начислено — вы не в клане) 🪙"
                 text = (
                     f"✅ <b>Выполнен еженедельный квест!</b>\n\n"
                     f"📋 {quest['desc']}\n"
