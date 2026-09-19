@@ -1102,8 +1102,10 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             response += "/create_promo [КОД] [ID/random] [лимит] - создать промокод\n"
             response += "/delete_promo [КОД] - удалить промокод\n"
             response += "/list_promo - список всех промокодов\n"
+            response += "/reset_weekly_quests - сюросить ежнедельные квесты\n"
             response += "/add_seasonal [ID] [стоимость] - Добавить карту в список сезонных\n"
             response += "/remove_seasonal [ID] - Убрать из списка сезонных\n"
+            response += "/list_seasonal - посмотреть сезонные карты\n"
             response += "/give_season_box [@никнейм] - Выдать игроку сезонный бокс\n"
             response += "/add_cents_to_player [ID] [количество] - добавить/списать бэт-коины\n"
             response += "/daily_stats - статистика активности за сегодня\n" 
@@ -1113,6 +1115,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             response += "/give_card_to_batpass [ID_карты] [количество] - выдать карту всем с Бэт-пассом\n"
             response += "/add_supercoins [@никнейм] [количество] - начислить супер-коины в бюджет клана\n"
             response += "/reset_event_all confirm - сбросить прохождение ивента у всех\n"
+            response += "/add_injustice_points [@никнейм] [сторона] [очки]- выдать очки противостояния стороне\n"
+            
             
             
         response += "💡 Нужна помощь?\n"
