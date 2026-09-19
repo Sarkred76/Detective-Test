@@ -4065,11 +4065,20 @@ async def card_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             if card_id in user_data.get("cards", []):
                 players_count += 1
         
+        # ⭐ Определяем вселенную карты ⭐
+        universe = card.get("universe", "none")
+        if universe == "classic":
+            universe_text = "🏛 **Classic**"
+        elif universe == "injustice":
+            universe_text = "⚔️ **Injustice**"
+        else:
+            universe_text = "❌ **Нет**"
+
         info_text = (
             f"📊 **Информация о карте #{card_id}**\n"
             f"🏷 **Название:** {card.get('title')}\n"
             f"🌟 **Редкость:** {card.get('rarity')}\n"
-            f"🏛 **Classic:** {'Да' if card.get('is_classic') else 'Нет'}\n"
+            f"🌍 **Вселенная:** {universe_text}\n"
         )
 
         if card.get("catchphrase"):
