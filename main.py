@@ -84,6 +84,20 @@ FRIENDS_AVATARS = [FRIENDS_AVATAR_1_URL, FRIENDS_AVATAR_2_URL]
 # ===== АВАТАРКА КЛАНА =====
 DEFAULT_CLAN_AVATAR = None  # None означает отсутствие аватарки (используется текст)
 
+# ===== ПРОТИВОСТОЯНИЕ (INJUSTICE) =====
+INJUSTICE_SIDES = {
+    "regime": {
+        "name": "Режим",
+        "emoji": "👑",
+        "description": "Деспотический режим, в котором больше нет войн и страданий, есть только Супермен - правитель этого мира."
+    },
+    "resistance": {
+        "name": "Сопротивление",
+        "emoji": "✊",
+        "description": "Сопротивление, сражающееся за свободу от тирании, где боги и суперлюди не выше законов."
+    }
+}
+
 MENU_IMAGE = "https://files.catbox.moe/zj1vl8.jpg"
 QUESTS_IMAGE = "https://files.catbox.moe/0k82du.jpg"
 
@@ -549,6 +563,18 @@ def migrate_data(data: Dict) -> Dict:
             user_data["event_completed_at"] = 0
         if "injustice_exchanged" not in user_data:
             user_data["injustice_exchanged"] = False
+
+    # ⭐ НОВОЕ: Миграция данных для Противостояния ⭐
+    if "injustice" not in data:
+        data["injustice"] = {
+            "regime": {"clans": [], "points": 0},
+            "resistance": {"clans": [], "points": 0}
+        }
+
+    # ⭐ Миграция поля injustice_side для кланов ⭐
+    for clan_id, clan_data in data.get("clans", {}).items():
+        if "injustice_side" not in clan_data:
+            clan_data["injustice_side"] = None
 
     for card in data.get("cards", []):
         # ⭐ Миграция: конвертируем is_classic в universe ⭐
@@ -3162,6 +3188,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await event_menu(update, context)
             return
 
+        elif text == "⚔️ Противостояние":
+            await show_injustice_stats(update, context)
+            return
+
         elif text == "🎙 Начать допрос":
             await start_interrogation(update, context)
             return
@@ -3300,6 +3330,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     if super_coins_amount > 0:
                         clan_data["super_coins"] = clan_data.get("super_coins", 0) + super_coins_amount
                         super_coins_earned = super_coins_amount
+                        add_injustice_points_to_clan(user_clan_id, super_coins_amount, data)
                         logger.info(f"Клан {clan_data.get('name')} получил {super_coins_amount} супер-коинов за карту #{card['id']}")
 
             # ⭐ ОБНОВЛЕНИЕ ВРЕМЕНИ И БЕСПЛАТНЫХ ПОПЫТОК ⭐
@@ -8581,7 +8612,7 @@ async def submenu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             [KeyboardButton("👤 Личное дело")],
             [KeyboardButton("📜 Квесты"), KeyboardButton("🏰 Кланы")],
             [KeyboardButton("🛍️ Магазин"), KeyboardButton("🍺 Бар")],
-            [KeyboardButton("🃏 Ивент")],
+            [KeyboardButton("🃏 Ивент"), KeyboardButton("⚔️ Противостояние")],
             [KeyboardButton("🔙 Назад в главное меню")],
         ]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -8798,6 +8829,7 @@ async def update_quest_progress(
                         clan = data["clans"].get(clan_id)
                         if clan:
                             clan["super_coins"] = clan.get("super_coins", 0) + quest["reward_amount"]
+                            add_injustice_points_to_clan(clan_id, quest["reward_amount"], data)
                             logger.info(f"Клан {clan.get('name')} получил {quest['reward_amount']} супер-коинов за квест {quest_id}")
                         else:
                             logger.warning(f"Клан {clan_id} не найден при начислении супер-коинов")
@@ -10748,7 +10780,7 @@ async def event_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
                     [KeyboardButton("👤 Личное дело")],
                     [KeyboardButton("📜 Квесты"), KeyboardButton("🏰 Кланы")],
                     [KeyboardButton("🛍️ Магазин"), KeyboardButton("🍺 Бар")],
-                    [KeyboardButton("🃏 Ивент")],
+                    [KeyboardButton("🃏 Ивент"), KeyboardButton("⚔️ Противостояние")],
                     [KeyboardButton("🔙 Назад в главное меню")],
                 ]
                 await update.message.reply_text(
@@ -11360,7 +11392,7 @@ async def process_interrogation_answer(update: Update, context: ContextTypes.DEF
                     [KeyboardButton("👤 Личное дело")],
                     [KeyboardButton("📜 Квесты"), KeyboardButton("🏰 Кланы")],
                     [KeyboardButton("🛍️ Магазин"), KeyboardButton("🍺 Бар")],
-                    [KeyboardButton("🃏 Ивент")],
+                    [KeyboardButton("🃏 Ивент"), KeyboardButton("⚔️ Противостояние")],
                 ]
             
             await update.message.reply_text(
@@ -11522,7 +11554,7 @@ async def finish_interrogation(update: Update, context: ContextTypes.DEFAULT_TYP
             [KeyboardButton("👤 Личное дело")],
             [KeyboardButton("📜 Квесты"), KeyboardButton("🏰 Кланы")],
             [KeyboardButton("🛍️ Магазин"), KeyboardButton("🍺 Бар")],
-            [KeyboardButton("🃏 Ивент")],
+            [KeyboardButton("🃏 Ивент"), KeyboardButton("⚔️ Противостояние")],
             [KeyboardButton("🔙 Назад в главное меню")],
         ]
         
@@ -12718,6 +12750,527 @@ async def reset_event_all(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         logger.error(f"Ошибка reset_event_all: {e}")
         await update.message.reply_text("❌ Ошибка при сбросе ивента")
 
+def add_injustice_points_to_clan(clan_id: str, amount: int, data: Dict) -> None:
+    """Добавляет очки противостояния клану и его команде."""
+    if amount <= 0:
+        return
+    
+    clan = data.get("clans", {}).get(clan_id)
+    if not clan:
+        return
+    
+    side = clan.get("injustice_side")
+    if not side or side not in data.get("injustice", {}):
+        return  # Клан не выбрал сторону
+    
+    # ⭐ Добавляем очки команде ⭐
+    data["injustice"][side]["points"] = data["injustice"][side].get("points", 0) + amount
+    
+    # ⭐ Обновляем очки клана внутри команды ⭐
+    for clan_entry in data["injustice"][side]["clans"]:
+        if clan_entry.get("id") == clan_id:
+            clan_entry["points"] = clan_entry.get("points", 0) + amount
+            break
+
+async def injustice_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Команда /injustice для выбора стороны клана (только для глав)."""
+    try:
+        user_id = str(update.effective_user.id)
+        data = load_data()
+        
+        clan_id = get_user_clan(user_id, data)
+        if not clan_id:
+            await update.message.reply_text("❌ Вы не состоите в клане!")
+            return
+        
+        clan = get_clan_data(clan_id, data)
+        if not clan:
+            await update.message.reply_text("❌ Клан не найден!")
+            return
+        
+        if not is_clan_leader(user_id, clan_id, data):
+            await update.message.reply_text("❌ Только глава клана может выбрать сторону!")
+            return
+        
+        # ⭐ Проверяем, выбрал ли клан уже сторону ⭐
+        current_side = clan.get("injustice_side")
+        if current_side:
+            side_info = INJUSTICE_SIDES[current_side]
+            await update.message.reply_text(
+                f"⚔️ <b>Ваш клан уже выбрал сторону!</b>\n\n"
+                f"{side_info['emoji']} <b>{side_info['name']}</b>\n"
+                f"<i>{side_info['description']}</i>\n\n"
+                f"🔒 Решение окончательное и не может быть изменено.",
+                parse_mode="HTML"
+            )
+            return
+        
+        # ⭐ Показываем выбор стороны ⭐
+        text = (
+            "⚔️ <b>ПРОТИВОСТОЯНИЕ</b>\n\n"
+            "Грядёт противостояние, в котором каждому клану необходимо выбрать свою сторону:\n\n"
+            f"👑 <b>Режим</b>\n"
+            f"<i>{INJUSTICE_SIDES['regime']['description']}</i>\n\n"
+            f"✊ <b>Сопротивление</b>\n"
+            f"<i>{INJUSTICE_SIDES['resistance']['description']}</i>\n\n"
+            "Выберите сторону, за которую будет сражаться ваш клан до конца сезона. "
+            "<b>Решение нельзя будет изменить</b>, поэтому выбирайте с умом.\n\n"
+            "💡 В течение сезона каждая сторона будет получать очки, эквивалентные "
+            "набранным супер-коинам, а в конце сезона каждый участник кланов получит "
+            "награды в зависимости от того, победила ли его команда или проиграла."
+        )
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("👑 Режим", callback_data="injustice_choose_regime"),
+                InlineKeyboardButton("✊ Сопротивление", callback_data="injustice_choose_resistance"),
+            ]
+        ]
+        
+        await update.message.reply_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+        
+    except Exception as e:
+        logger.error(f"Ошибка injustice_command: {e}")
+        await update.message.reply_text("❌ Ошибка при открытии меню Противостояния")
+
+async def injustice_choose_side(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Показывает подтверждение выбора стороны."""
+    try:
+        query = update.callback_query
+        user_id = str(query.from_user.id)
+        
+        # ⭐ Определяем выбранную сторону ⭐
+        side = "regime" if "regime" in query.data else "resistance"
+        side_info = INJUSTICE_SIDES[side]
+        
+        data = load_data()
+        clan_id = get_user_clan(user_id, data)
+        
+        if not clan_id:
+            await query.answer("❌ Вы не в клане!", show_alert=True)
+            return
+        
+        clan = get_clan_data(clan_id, data)
+        if not clan:
+            await query.answer("❌ Клан не найден!", show_alert=True)
+            return
+        
+        if not is_clan_leader(user_id, clan_id, data):
+            await query.answer("❌ Только глава может выбирать!", show_alert=True)
+            return
+        
+        # ⭐ Повторная проверка ⭐
+        if clan.get("injustice_side"):
+            await query.answer("❌ Клан уже выбрал сторону!", show_alert=True)
+            return
+        
+        clan_name = html.escape(clan.get("name", "Клан"))
+        
+        text = (
+            f"⚠️ <b>Подтверждение выбора</b>\n\n"
+            f"Ваш клан <b>{clan_name}</b> встанет на сторону:\n\n"
+            f"{side_info['emoji']} <b>{side_info['name']}</b>\n"
+            f"<i>{side_info['description']}</i>\n\n"
+            f"⚠️ <b>Это решение окончательное!</b>\n"
+            f"Изменить сторону после подтверждения будет невозможно.\n\n"
+            f"✅ Подтвердить выбор?"
+        )
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ Подтвердить", callback_data=f"injustice_confirm_{side}"),
+                InlineKeyboardButton("❌ Отмена", callback_data="injustice_cancel")
+            ]
+        ]
+        
+        try:
+            await query.edit_message_text(
+                text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            if "Message is not modified" not in str(e):
+                logger.error(f"Ошибка injustice_choose_side: {e}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка injustice_choose_side: {e}")
+        await query.answer("❌ Ошибка", show_alert=True)
+
+
+async def injustice_confirm_side(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Подтверждает выбор стороны клана."""
+    try:
+        query = update.callback_query
+        user_id = str(query.from_user.id)
+        
+        # ⭐ Определяем выбранную сторону ⭐
+        side = "regime" if "regime" in query.data else "resistance"
+        side_info = INJUSTICE_SIDES[side]
+        
+        data = load_data()
+        clan_id = get_user_clan(user_id, data)
+        
+        if not clan_id:
+            await query.answer("❌ Вы не в клане!", show_alert=True)
+            return
+        
+        clan = get_clan_data(clan_id, data)
+        if not clan:
+            await query.answer("❌ Клан не найден!", show_alert=True)
+            return
+        
+        if not is_clan_leader(user_id, clan_id, data):
+            await query.answer("❌ Только глава может выбирать!", show_alert=True)
+            return
+        
+        # ⭐ Повторная проверка ⭐
+        if clan.get("injustice_side"):
+            await query.answer("❌ Клан уже выбрал сторону!", show_alert=True)
+            return
+        
+        clan_name = clan.get("name", "Клан")
+        
+        # ⭐ Устанавливаем сторону ⭐
+        clan["injustice_side"] = side
+        
+        # ⭐ Добавляем клан в список команды ⭐
+        data["injustice"][side]["clans"].append({
+            "id": clan_id,
+            "name": clan_name,
+            "points": 0,
+            "joined_at": int(time.time())
+        })
+        
+        save_data(data)
+        
+        # ⭐ Обновляем сообщение ⭐
+        success_text = (
+            f"✅ <b>Выбор сделан!</b>\n\n"
+            f"🏰 Клан <b>{html.escape(clan_name)}</b> встал на сторону:\n\n"
+            f"{side_info['emoji']} <b>{side_info['name']}</b>\n"
+            f"<i>{side_info['description']}</i>\n\n"
+            f"🔒 Решение окончательное.\n\n"
+            f"💡 Теперь ваш клан будет получать очки Противостояния "
+            f"вместе с каждым полученным супер-коином."
+        )
+        
+        try:
+            await query.edit_message_text(
+                success_text,
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            if "Message is not modified" not in str(e):
+                logger.error(f"Ошибка injustice_confirm_side: {e}")
+        
+        # ⭐ Уведомляем всех участников клана ⭐
+        for member_id in clan.get("members", {}).keys():
+            if member_id == user_id:
+                continue  # Не уведомляем главу (он уже видит сообщение)
+            try:
+                await context.bot.send_message(
+                    chat_id=int(member_id),
+                    text=(
+                        f"⚔️ <b>Ваш клан выбрал сторону в Противостоянии!</b>\n\n"
+                        f"🏰 Клан: <b>{html.escape(clan_name)}</b>\n"
+                        f"{side_info['emoji']} Сторона: <b>{side_info['name']}</b>\n\n"
+                        f"<i>{side_info['description']}</i>\n\n"
+                        f"💡 Теперь каждый супер-коин, полученный кланом, "
+                        f"будет приносить очки Противостояния вашей команде!"
+                    ),
+                    parse_mode="HTML"
+                )
+            except Exception as notify_error:
+                logger.warning(f"Не удалось уведомить участника {member_id}: {notify_error}")
+        
+        await query.answer("✅ Выбор подтверждён!", show_alert=False)
+        logger.info(f"Клан {clan_name} ({clan_id}) выбрал сторону {side} в Противостоянии")
+        
+    except Exception as e:
+        logger.error(f"Ошибка injustice_confirm_side: {e}")
+        await query.answer("❌ Ошибка", show_alert=True)
+
+
+async def injustice_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Отмена выбора стороны."""
+    try:
+        query = update.callback_query
+        await query.answer("❌ Выбор отменён", show_alert=False)
+        
+        try:
+            await query.edit_message_text(
+                "❌ <b>Выбор стороны отменён.</b>\n\n"
+                "Вы можете вернуться к выбору через команду /injustice.",
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            if "Message is not modified" not in str(e):
+                logger.error(f"Ошибка injustice_cancel: {e}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка injustice_cancel: {e}")
+
+async def show_injustice_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Показывает статистику Противостояния."""
+    try:
+        user_id = str(update.effective_user.id)
+        data = load_data()
+        
+        injustice = data.get("injustice", {
+            "regime": {"clans": [], "points": 0},
+            "resistance": {"clans": [], "points": 0}
+        })
+        
+        regime_points = injustice.get("regime", {}).get("points", 0)
+        resistance_points = injustice.get("resistance", {}).get("points", 0)
+        total_points = regime_points + resistance_points
+        
+        # ⭐ Считаем проценты ⭐
+        if total_points > 0:
+            regime_percent = round(regime_points / total_points * 100)
+            resistance_percent = 100 - regime_percent
+        else:
+            regime_percent = 50
+            resistance_percent = 50
+        
+        # ⭐ Формируем прогресс-бар ⭐
+        bar_length = 20
+        regime_bars = round(regime_percent / 100 * bar_length)
+        resistance_bars = bar_length - regime_bars
+        
+        regime_bar = "█" * regime_bars + "░" * (bar_length - regime_bars)
+        resistance_bar = "█" * resistance_bars + "░" * (bar_length - resistance_bars)
+        
+        # ⭐ Формируем текст ⭐
+        text = (
+            "⚔️ <b>ПРОТИВОСТОЯНИЕ</b>\n\n"
+            f"👑 <b>Режим:</b> {regime_points} очков\n"
+            f"<code>{regime_bar}</code> {regime_percent}%\n\n"
+            f"✊ <b>Сопротивление:</b> {resistance_points} очков\n"
+            f"<code>{resistance_bar}</code> {resistance_percent}%\n\n"
+        )
+        
+        # ⭐ Списки кланов (отсортированы по дате вступления) ⭐
+        regime_clans = sorted(
+            injustice.get("regime", {}).get("clans", []),
+            key=lambda x: x.get("joined_at", 0)
+        )
+        resistance_clans = sorted(
+            injustice.get("resistance", {}).get("clans", []),
+            key=lambda x: x.get("joined_at", 0)
+        )
+        
+        text += "👑 <b>Кланы Режима:</b>\n"
+        if regime_clans:
+            for clan_entry in regime_clans:
+                clan_points = clan_entry.get("points", 0)
+                clan_name = html.escape(clan_entry.get("name", "Клан"))
+                text += f"• {clan_name} — {clan_points} очков\n"
+        else:
+            text += "<i>Пока нет кланов</i>\n"
+        
+        text += "\n✊ <b>Кланы Сопротивления:</b>\n"
+        if resistance_clans:
+            for clan_entry in resistance_clans:
+                clan_points = clan_entry.get("points", 0)
+                clan_name = html.escape(clan_entry.get("name", "Клан"))
+                text += f"• {clan_name} — {clan_points} очков\n"
+        else:
+            text += "<i>Пока нет кланов</i>\n"
+        
+        # ⭐ Информация о клане игрока ⭐
+        user_clan_id = get_user_clan(user_id, data)
+        if user_clan_id:
+            user_clan = get_clan_data(user_clan_id, data)
+            if user_clan:
+                side = user_clan.get("injustice_side")
+                if side:
+                    side_info = INJUSTICE_SIDES[side]
+                    # ⭐ Ищем очки клана ⭐
+                    clan_points = 0
+                    for clan_entry in injustice.get(side, {}).get("clans", []):
+                        if clan_entry.get("id") == user_clan_id:
+                            clan_points = clan_entry.get("points", 0)
+                            break
+                    text += (
+                        f"\n🏰 <b>Ваш клан:</b> {html.escape(user_clan.get('name', 'Клан'))}\n"
+                        f"{side_info['emoji']} Сторона: <b>{side_info['name']}</b>\n"
+                        f"💎 Вклад клана: {clan_points} очков"
+                    )
+                else:
+                    text += (
+                        "\n💡 <i>Ваш клан ещё не выбрал сторону. "
+                        "Попросите главу клана выполнить команду /injustice.</i>"
+                    )
+        else:
+            text += "\n💡 <i>Вступите в клан, чтобы участвовать в Противостоянии.</i>"
+        
+        await update.message.reply_text(
+            text,
+            parse_mode="HTML"
+        )
+        
+    except Exception as e:
+        logger.error(f"Ошибка show_injustice_stats: {e}")
+        await update.message.reply_text("❌ Ошибка при загрузке статистики Противостояния")
+
+async def add_injustice_points_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Добавляет очки противостояния клану и его команде."""
+    try:
+        data = load_data()
+        user_id = str(update.effective_user.id)
+        
+        if not is_admin(user_id, data):
+            await update.message.reply_text("🚫 Только для администратора!")
+            return
+        
+        # ⭐ Проверяем аргументы ⭐
+        if not context.args or len(context.args) < 3:
+            await update.message.reply_text(
+                "ℹ️ <b>Формат команды:</b>\n"
+                "/add\\_injustice\\_points \\[@никнейм\\] \\[сторона\\] \\[очки\\]\n\n"
+                "<b>Стороны:</b>\n"
+                "• regime — Режим\n"
+                "• resistance — Сопротивление\n\n"
+                "<b>Примеры:</b>\n"
+                "/add\\_injustice\\_points @username regime 100\n"
+                "/add\\_injustice\\_points @player resistance 50",
+                parse_mode="HTML"
+            )
+            return
+        
+        target_input = context.args[0]
+        side_input = context.args[1].lower()
+        points_amount = int(context.args[2])
+        
+        # ⭐ Проверяем сторону ⭐
+        if side_input not in ["regime", "resistance"]:
+            await update.message.reply_text(
+                "⚠️ Неверная сторона! Доступные: <b>regime</b>, <b>resistance</b>",
+                parse_mode="HTML"
+            )
+            return
+        
+        side_info = INJUSTICE_SIDES[side_input]
+        
+        # ⭐ Определяем ID игрока ⭐
+        target_user_id = None
+        if target_input.startswith("@"):
+            username_to_find = target_input[1:].strip().lower()
+            for uid, udata in data["users"].items():
+                if udata.get("username", "").lower() == username_to_find:
+                    target_user_id = uid
+                    break
+            if not target_user_id:
+                await update.message.reply_text(f"⚠️ Игрок с никнеймом @{username_to_find} не найден!")
+                return
+        else:
+            target_user_id = target_input
+            if target_user_id not in data["users"]:
+                await update.message.reply_text(f"⚠️ Игрок с ID {target_user_id} не найден!")
+                return
+        
+        target_user_data = data["users"].get(target_user_id, {})
+        target_name = target_user_data.get("first_name", "Игрок")
+        if target_user_data.get("last_name"):
+            target_name += f" {target_user_data['last_name']}"
+        
+        # ⭐ Находим клан игрока ⭐
+        clan_id = get_user_clan(target_user_id, data)
+        if not clan_id:
+            await update.message.reply_text(
+                f"⚠️ Игрок {html.escape(target_name)} не состоит ни в одном клане!"
+            )
+            return
+        
+        clan = get_clan_data(clan_id, data)
+        if not clan:
+            await update.message.reply_text("❌ Клан не найден или повреждён!")
+            return
+        
+        clan_name = clan.get("name", "Клан")
+        
+        # ⭐ Проверяем, что клан состоит в указанной команде ⭐
+        current_side = clan.get("injustice_side")
+        if current_side != side_input:
+            if current_side:
+                current_side_info = INJUSTICE_SIDES[current_side]
+                await update.message.reply_text(
+                    f"⚠️ Клан <b>{html.escape(clan_name)}</b> уже состоит в команде "
+                    f"<b>{current_side_info['name']}</b>!\n\n"
+                    f"Укажите правильную сторону или сначала сбросьте выбор."
+                )
+            else:
+                await update.message.reply_text(
+                    f"⚠️ Клан <b>{html.escape(clan_name)}</b> ещё не выбрал сторону!\n\n"
+                    f"Попросите главу клана выполнить команду /injustice."
+                )
+            return
+        
+        # ⭐ Начисляем очки ⭐
+        old_points = data["injustice"][side_input].get("points", 0)
+        
+        # ⭐ Обновляем общие очки команды ⭐
+        data["injustice"][side_input]["points"] = old_points + points_amount
+        
+        # ⭐ Обновляем очки клана внутри команды ⭐
+        clan_found = False
+        for clan_entry in data["injustice"][side_input]["clans"]:
+            if clan_entry.get("id") == clan_id:
+                clan_entry["points"] = clan_entry.get("points", 0) + points_amount
+                clan_found = True
+                break
+        
+        if not clan_found:
+            # ⭐ Если клан не в списке — добавляем ⭐
+            data["injustice"][side_input]["clans"].append({
+                "id": clan_id,
+                "name": clan_name,
+                "points": points_amount,
+                "joined_at": int(time.time())
+            })
+        
+        save_data(data)
+        
+        new_points = data["injustice"][side_input]["points"]
+        
+        # ⭐ Формируем текст ответа ⭐
+        if points_amount > 0:
+            action_text = f"💎 Начислено: +{points_amount} очков"
+        elif points_amount < 0:
+            action_text = f"💸 Списано: {points_amount} очков"
+        else:
+            action_text = "ℹ️ Количество равно 0 — очки не изменились"
+        
+        await update.message.reply_text(
+            f"✅ <b>Очки Противостояния изменены!</b>\n\n"
+            f"🏰 Клан: {html.escape(clan_name)}\n"
+            f"👤 Через игрока: {html.escape(target_name)} (@{target_user_data.get('username', '—')})\n"
+            f"{side_info['emoji']} Команда: <b>{side_info['name']}</b>\n\n"
+            f"{action_text}\n"
+            f"📊 Было: {old_points} очков\n"
+            f"📈 Стало: {new_points} очков",
+            parse_mode="HTML"
+        )
+        
+        logger.info(
+            f"Админ {user_id} изменил очки Противостояния клана {clan_name}: "
+            f"{old_points} → {new_points} ({'+' if points_amount >= 0 else ''}{points_amount}) "
+            f"в команде {side_info['name']}"
+        )
+        
+    except ValueError:
+        await update.message.reply_text("⚠️ Количество очков должно быть числом!")
+    except Exception as e:
+        logger.error(f"Ошибка add_injustice_points_command: {e}")
+        await update.message.reply_text("❌ Ошибка при изменении очков Противостояния")
+
+
 # ===== ЗАПУСК БОТА =====
 
 def main() -> None:
@@ -12788,6 +13341,8 @@ def main() -> None:
             CommandHandler("add_supercoins", add_supercoins_to_clan),
             CommandHandler("start_new_season", start_new_season),
             CommandHandler("reset_event_all", reset_event_all),
+            CommandHandler("injustice", injustice_command),
+            CommandHandler("add_injustice_points", add_injustice_points_command),
             MessageHandler(filters.PHOTO | filters.VIDEO | filters.ANIMATION, handle_message),
             MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message),
             CallbackQueryHandler(mycards_callback, pattern=r"^(mycards_|barracks_|card_).*"),
@@ -12825,6 +13380,9 @@ def main() -> None:
             CallbackQueryHandler(injustice_exchange_cancel, pattern=r"^injustice_exchange_cancel$"),
             CallbackQueryHandler(injustice_exchange_no_cards, pattern=r"^injustice_exchange_no_cards$"),
             CallbackQueryHandler(injustice_exchange_close, pattern=r"^injustice_exchange_close$"),
+            CallbackQueryHandler(injustice_choose_side, pattern=r"^injustice_choose_"),
+            CallbackQueryHandler(injustice_confirm_side, pattern=r"^injustice_confirm_"),
+            CallbackQueryHandler(injustice_cancel, pattern=r"^injustice_cancel$"),
         ]
 
         for handler in handlers:
