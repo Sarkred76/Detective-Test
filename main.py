@@ -247,9 +247,9 @@ CLAN_SHOP_ITEMS = {
         "emoji": "💰",
     },
     "exclusive_epic_tu": {
-        "name": "✨ Эксклюзивный Epic Team-Up",
-        "description": "Случайному участнику клана выдаётся эксклюзивная Epic Team-Up карта",
-        "price": 200,
+        "name": "✨ Эксклюзивный Epic",
+        "description": "Случайному участнику клана выдаётся эксклюзивная Epic карта",
+        "price": 150,
         "emoji": "✨",
     },
     "friends_avatar": {
