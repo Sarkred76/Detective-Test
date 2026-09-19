@@ -4289,17 +4289,17 @@ async def casino_play(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 return
 
             # Проверяем баланс
-            if cents < 1500:
+            if cents < 1300:
                 await query.edit_message_text(
                     f"❌ **Недостаточно бэт-коинов!**\n\n"
-                    f"Нужно: 1500 бэт-коинов\n"
+                    f"Нужно: 1300 бэт-коинов\n"
                     f"У вас: {cents} бэт-коинов\n\n",
                     parse_mode="Markdown",
                 )
                 return
 
             # Списываем центы и попытки
-            user_data["cents"] -= 1500
+            user_data["cents"] -= 1300
             user_data["casino_attempts"] -= 1
         save_data(data)        
         # ⭐ ОТПРАВЛЯЕМ СЛОТ TELEGRAM ⭐
@@ -4338,7 +4338,7 @@ async def casino_play(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             
             await query.message.reply_text(
                 f"😔 Не повезло! Попробуйте ещё раз.\n\n"
-                f"💰 Списано: 1500 бэт-коинов\n"
+                f"💰 Списано: 1300 бэт-коинов\n"
                 f"🎲 Осталось попыток: {user_data['casino_attempts']}\n"
                 f"💰 Ваш баланс: {user_data['cents']} бэт-коинов",
                 reply_markup=InlineKeyboardMarkup(keyboard), 
@@ -5090,7 +5090,7 @@ async def open_casino_from_button(update: Update, context: ContextTypes.DEFAULT_
         cents = user_data.get("cents", 0) if user_data else 0
         
         # ⭐ НОВОЕ: Отображение баланса с индикаторами ⭐
-        if cents >= 1500:
+        if cents >= 1300:
             balance_text = f"💰 Ваш баланс: **{cents}** бэт-коинов ✅"
         else:
             balance_text = f"💰 Ваш баланс: **{cents}** бэт-коинов ❌ _(недостаточно)_"
@@ -5103,7 +5103,7 @@ async def open_casino_from_button(update: Update, context: ContextTypes.DEFAULT_
         await update.message.reply_text(
             f"🎰 **Казино**\n"
             f"📜 **Правила:**\n"
-            f"• Стоимость игры: 1500 бэт-коинов\n"
+            f"• Стоимость игры: 1300 бэт-коинов\n"
             f"• Крутите слот и получите 3 одинаковых значения\n"
             f"• При победе: 10 бесплатных попыток\n"
             f"• Лимит: {max_casino_attempts} игр в день (сброс в 00:00 МСК)\n"
