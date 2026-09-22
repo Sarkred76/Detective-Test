@@ -8116,6 +8116,7 @@ async def burn_all_execute(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             for _ in range(duplicates_count):
                 if card_id in user_data["cards"]:
                     user_data["cards"].remove(card_id)
+                    update_seasonal_on_burn(user_data, card["rarity"])
         
         # ⭐ ВЫДАЁМ НАГРАДУ ⭐
         user_data["cents"] = user_data.get("cents", 0) + total_cents
@@ -8127,6 +8128,7 @@ async def burn_all_execute(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await update_quest_progress(context, user_id, "burn_common_3", burned_common)
         if burned_rare > 0:
             await update_weekly_quest_progress(context, user_id, "weekly_burn_rare_4", burned_rare)
+        
         
         # ⭐ ФОРМИРУЕМ ТЕКСТ ⭐
         unique_cards_count = len(set(user_data["cards"]))
