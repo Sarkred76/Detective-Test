@@ -8098,7 +8098,7 @@ async def burn_all_execute(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             total_rolls += reward["free_rolls"] * duplicates
             cards_to_burn.append((cid, duplicates))
             
-            # Считаем для квестов
+            # Считаем для обычных/еженедельных квестов
             if card["rarity"] == "Common":
                 burned_common += duplicates
             elif card["rarity"] == "Rare":
@@ -8111,24 +8111,29 @@ async def burn_all_execute(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             )
             return
         
-        # ⭐ УДАЛЯЕМ ДУБЛИКАТЫ КАРТ (оставляя 1 копию каждой) ⭐
+        # ⭐ УДАЛЯЕМ ДУБЛИКАТЫ КАРТ И ОБНОВЛЯЕМ СЕЗОННЫЕ КВЕСТЫ ⭐
         for card_id, duplicates_count in cards_to_burn:
+            # ⭐ ИСПРАВЛЕНИЕ: Находим объект карты, чтобы получить её редкость ⭐
+            card = find_card_by_id(card_id, data["cards"])
+            if not card:
+                continue
+                
             for _ in range(duplicates_count):
                 if card_id in user_data["cards"]:
                     user_data["cards"].remove(card_id)
+                    # ⭐ ТЕПЕРЬ ЭТО РАБОТАЕТ: передаем правильную редкость ⭐
                     update_seasonal_on_burn(user_data, card["rarity"])
         
         # ⭐ ВЫДАЁМ НАГРАДУ ⭐
         user_data["cents"] = user_data.get("cents", 0) + total_cents
         user_data["free_rolls"] = user_data.get("free_rolls", 0) + total_rolls
-        save_data(data)
+        save_data(data) # Сохраняем прогресс сезонных квестов и награды
         
-        # ⭐ ТРИГГЕРЫ КВЕСТОВ ⭐
+        # ⭐ ТРИГГЕРЫ ОБЫЧНЫХ/ЕЖЕНЕДЕЛЬНЫХ КВЕСТОВ ⭐
         if burned_common > 0:
             await update_quest_progress(context, user_id, "burn_common_3", burned_common)
         if burned_rare > 0:
             await update_weekly_quest_progress(context, user_id, "weekly_burn_rare_4", burned_rare)
-        
         
         # ⭐ ФОРМИРУЕМ ТЕКСТ ⭐
         unique_cards_count = len(set(user_data["cards"]))
@@ -8138,46 +8143,7 @@ async def burn_all_execute(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             f"🗑️ Сожжено дубликатов: **{total_duplicates}**\n"
             f"🛡 Уникальных карт осталось: **{unique_cards_count}**\n\n"
             f"🎁 **Награда получена:**\n"
-            f"💰 +{total_cents} бэт-коинов\n"
-            f"🔍 +{total_rolls} бесплатных попыток\n\n"
-        )
-        
-        keyboard = [[InlineKeyboardButton("🔙 Назад в меню сжигания", callback_data="burn_menu")]]
-        
-        # ⭐ Универсальная логика отправки ⭐
-        try:
-            await query.edit_message_text(
-                text,
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode="Markdown"
-            )
-        except Exception as e:
-            error_str = str(e)
-            if "There is no text" in error_str:
-                try:
-                    await query.message.delete()
-                except:
-                    pass
-                await context.bot.send_message(
-                    chat_id=query.message.chat_id,
-                    text=text,
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode="Markdown"
-                )
-            elif "Message is not modified" in error_str:
-                return
-            else:
-                logger.error(f"Ошибка в burn_all_execute: {e}")
-                await query.answer("❌ Произошла ошибка", show_alert=True)
-        
-        logger.info(
-            f"Игрок {user_id} сжёг {total_duplicates} дубликатов, "
-            f"осталось {unique_cards_count} уникальных карт"
-        )
-        
-    except Exception as e:
-        logger.error(f"Ошибка в burn_all_execute: {e}")
-        await query.answer("❌ Произошла ошибка", show_alert=True)
+
 
 async def burn_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик всех callback кнопок сжигания."""
