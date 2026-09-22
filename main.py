@@ -8056,7 +8056,6 @@ async def burn_all_preview(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         logger.error(f"Ошибка в burn_all_preview: {e}")
         await query.answer("❌ Произошла ошибка", show_alert=True)
 
-
 async def burn_all_execute(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Выполняет сжигание ВСЕХ дубликатов карт (оставляя 1 копию каждой)."""
     try:
@@ -8143,7 +8142,46 @@ async def burn_all_execute(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             f"🗑️ Сожжено дубликатов: **{total_duplicates}**\n"
             f"🛡 Уникальных карт осталось: **{unique_cards_count}**\n\n"
             f"🎁 **Награда получена:**\n"
-
+            f"💰 +{total_cents} бэт-коинов\n"
+            f"🔍 +{total_rolls} бесплатных попыток\n\n"
+        )
+        
+        keyboard = [[InlineKeyboardButton("🔙 Назад в меню сжигания", callback_data="burn_menu")]]
+        
+        # ⭐ Универсальная логика отправки ⭐
+        try:
+            await query.edit_message_text(
+                text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            error_str = str(e)
+            if "There is no text" in error_str:
+                try:
+                    await query.message.delete()
+                except:
+                    pass
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text=text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode="Markdown"
+                )
+            elif "Message is not modified" in error_str:
+                return
+            else:
+                logger.error(f"Ошибка в burn_all_execute: {e}")
+                await query.answer("❌ Произошла ошибка", show_alert=True)
+        
+        logger.info(
+            f"Игрок {user_id} сжёг {total_duplicates} дубликатов, "
+            f"осталось {unique_cards_count} уникальных карт"
+        )
+        
+    except Exception as e:
+        logger.error(f"Ошибка в burn_all_execute: {e}")
+        await query.answer("❌ Произошла ошибка", show_alert=True)
 
 async def burn_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик всех callback кнопок сжигания."""
