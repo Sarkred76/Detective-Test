@@ -8977,7 +8977,7 @@ async def quests_seasonal_view(update: Update, context: ContextTypes.DEFAULT_TYP
             if quest.get("check_button"):
                 # Квест с кнопкой "Проверить"
                 text = (
-                    f"🏆 <b>Сезонный квест {current_quest_id}/12</b>\n\n"
+                    f"🏆 <b>Сезонный квест {current_quest_id}/10</b>\n\n"
                     f"📋 {quest['desc']}{extra_info}\n\n"
                     f"🎁 Награда: {reward_text}"
                 )
@@ -8999,7 +8999,7 @@ async def quests_seasonal_view(update: Update, context: ContextTypes.DEFAULT_TYP
                 bar = "█" * filled + "░" * (progress_bar_len - filled)
                 
                 text = (
-                    f"🏆 <b>Сезонный квест {current_quest_id}/12</b>\n\n"
+                    f"🏆 <b>Сезонный квест {current_quest_id}/10</b>\n\n"
                     f"📋 {quest['desc']}\n"
                     f"📊 Прогресс: [{bar}] {progress}/{target}\n\n"
                     f"🎁 Награда: {reward_text}"
