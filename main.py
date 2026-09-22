@@ -256,7 +256,7 @@ SEASONAL_QUESTS = {
         "rarity": "Epic Team-up",
         "target": 2,
         "reward": {"free_rolls": 6},
-        "desc": "Получить 2 карты редкости Epic Team-Up через «Получить досье»"
+        "desc": "Получить 2 карты редкости Epic Team-Up"
     },
     5: {
         "id": 5,
@@ -280,7 +280,7 @@ SEASONAL_QUESTS = {
         "rarity": "Legendary",
         "target": 1,
         "reward": {"free_rolls": 10},
-        "desc": "Получить 1 карту редкости Legendary через «Получить досье»"
+        "desc": "Получить 1 карту редкости Legendary"
     },
     8: {
         "id": 8,
@@ -288,7 +288,7 @@ SEASONAL_QUESTS = {
         "rarity": "Highlight",
         "target": 1,
         "reward": {"cents": 5000},
-        "desc": "Получить 1 карту редкости Highlight через «Получить досье»"
+        "desc": "Получить 1 карту редкости Highlight"
     },
     9: {
         "id": 9,
@@ -296,7 +296,7 @@ SEASONAL_QUESTS = {
         "rarity": "Rare Team-up",
         "target": 35,
         "reward": {"rep_points": 6000},
-        "desc": "Получить 35 карт редкости Rare Team-Up через «Получить досье»"
+        "desc": "Получить 35 карт редкости Rare Team-Up"
     },
     10: {
         "id": 10,
