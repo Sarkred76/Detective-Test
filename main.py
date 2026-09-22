@@ -11758,7 +11758,7 @@ async def add_supercoins_to_clan(update: Update, context: ContextTypes.DEFAULT_T
         await update.message.reply_text("❌ Ошибка при изменении бюджета клана")
 
 async def start_new_season(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Сбрасывает сезонные очки репутации и счётчик Rolls-Box у ВСЕХ игроков."""
+    """Сбрасывает сезонные очки репутации, счётчик Rolls-Box и прогресс сезонных квестов у ВСЕХ игроков."""
     try:
         data = load_data()
         user_id = str(update.effective_user.id)
@@ -11778,7 +11778,8 @@ async def start_new_season(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 "⚠️ <b>ВНИМАНИЕ! Это действие затронет ВСЕХ игроков!</b>\n\n"
                 "📋 Будет сброшено:\n"
                 "• 💥 Сезонные очки репутации (season_points) → 0\n"
-                "• 📦 Счётчик купленных Rolls-Box (rolls_box_price) → 25000\n\n"
+                "• 📦 Счётчик купленных Rolls-Box (rolls_box_price) → 25000\n"
+                "• 📜 Прогресс сезонных квестов (возврат к 1-му квесту)\n\n"
                 "⚠️ <b>НЕ будут затронуты:</b>\n"
                 "• 💎 Общие очки репутации (total_points)\n"
                 "• 💰 Бэт-коины\n"
@@ -11803,6 +11804,9 @@ async def start_new_season(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             # Сбрасываем счётчик Rolls-Box к начальной цене
             udata["rolls_box_price"] = 25000
             
+            # ⭐ Сбрасываем прогресс сезонных квестов (возвращаем на 1-й квест) ⭐
+            udata["seasonal_quests"] = {"completed": [], "progress": {}}
+            
             reset_count += 1
         
         save_data(data)
@@ -11811,14 +11815,15 @@ async def start_new_season(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             f"✅ <b>Новый сезон начат!</b>\n\n"
             f"👥 Игроков обработано: {reset_count}\n"
             f"💥 Суммарно сброшено сезонных очков: {total_season_points}\n"
-            f"📦 Счётчик Rolls-Box сброшен до 25000 у всех\n\n"
+            f"📦 Счётчик Rolls-Box сброшен до 25000 у всех\n"
+            f"📜 Прогресс сезонных квестов сброшен у всех\n\n"
             f"🎉 Удачи в новом сезоне!",
             parse_mode="HTML"
         )
         
         logger.info(
             f"Админ {user_id} начал новый сезон: "
-            f"сброшены season_points и rolls_box_price у {reset_count} игроков"
+            f"сброшены season_points, rolls_box_price и seasonal_quests у {reset_count} игроков"
         )
         
     except Exception as e:
