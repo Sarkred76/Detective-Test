@@ -5377,6 +5377,7 @@ async def craft_execute(
         user_data["total_points"] += bonus["points"]
         user_data["season_points"] += bonus["points"]
         user_data["cents"] += bonus["cents"]
+        update_seasonal_on_card_get(user_data, new_card["rarity"])
         
         save_data(data)
         
