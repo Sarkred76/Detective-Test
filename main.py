@@ -75,7 +75,7 @@ ADD_CARD_WAITING_UNIVERSE = "add_card_waiting_universe"
 
 # ===== АВАТАРКИ =====
 DEFAULT_AVATAR_URL = "https://files.catbox.moe/xtviqr.jpg" 
-SEASONAL_AVATAR_URL = "https://files.catbox.moe/502g93.jpg"
+SEASONAL_2_AVATAR_URL = "https://files.catbox.moe/24sc2b.jpg"
 SEASON_BOX_AVATAR_URL = "https://files.catbox.moe/24sc2b.jpg"
 FRIENDS_AVATAR_1_URL = "https://ibb.co/GQN89Nzn"
 FRIENDS_AVATAR_2_URL = "https://ibb.co/bx2cr1h"
@@ -217,7 +217,7 @@ CRAFT_RULES = {
     "EpicTU_to_LegendaryTU": {
         "from_rarity": "Epic Team-up",
         "to_rarity": "Legendary Team-up",
-        "count_needed": 15,
+        "count_needed": 15,    
         "button_text": "15 Epic Team-up → 1 Legendary Team-up",
     },
 }
@@ -231,96 +231,80 @@ SEASONAL_QUESTS = {
         "type": "get_cards",
         "rarity": "Epic",
         "target": 5,
-        "reward": {"cents": 2000},
-        "desc": "Получить 5 карт редкости Epic через «Получить досье»"
+        "reward": {"free_rolls": 3},
+        "desc": "Получить 5 карт редкости Epic через"
     },
     2: {
         "id": 2,
         "type": "burn_cards",
         "rarity": "Epic",
         "target": 5,
-        "reward": {"rep_points": 3000},
+        "reward": {"cents": 2000},
         "desc": "Сжечь 5 карт редкости Epic"
     },
     3: {
         "id": 3,
-        "type": "get_cards",
-        "rarity": "Epic Team-up",
-        "target": 2,
-        "reward": {"free_rolls": 5},
-        "desc": "Получить 2 карты редкости Epic Team-Up через «Получить досье»"
+        "type": "buy_box",
+        "box": "rolls",
+        "target": 1,
+        "reward": {"rep_points": 3000},
+        "desc": "Купить Rolls-Box"
     },
     4: {
         "id": 4,
+        "type": "get_cards",
+        "rarity": "Epic Team-up",
+        "target": 2,
+        "reward": {"free_rolls": 6},
+        "desc": "Получить 2 карты редкости Epic Team-Up через «Получить досье»"
+    },
+    5: {
+        "id": 5,
         "type": "burn_cards",
         "rarity": "Epic Team-up",
         "target": 2,
         "reward": {"cents": 3000},
         "desc": "Сжечь 2 карты редкости Epic Team-Up"
     },
-    5: {
-        "id": 5,
+    6: {
+        "id": 6,
         "type": "clan",
         "target": 1,
         "reward": {"rep_points": 4000},
         "desc": "Вступить в клан или создать свой клан",
         "check_button": True
     },
-    6: {
-        "id": 6,
-        "type": "get_cards",
-        "rarity": "Rare Team-up",
-        "target": 30,
-        "reward": {"free_rolls": 10},
-        "desc": "Получить 30 карт редкости Rare Team-Up через «Получить досье»"
-    },
     7: {
         "id": 7,
         "type": "get_cards",
         "rarity": "Legendary",
         "target": 1,
-        "reward": {"cents": 4000},
+        "reward": {"free_rolls": 10},
         "desc": "Получить 1 карту редкости Legendary через «Получить досье»"
     },
     8: {
         "id": 8,
-        "type": "seasonal_cards",
-        "target": 1,
-        "reward": {"rep_points": 5000},
-        "desc": "Получить все карты из сезонного магазина",
-        "check_button": True
-    },
-    9: {
-        "id": 9,
-        "type": "burn_cards",
-        "rarity": "Legendary",
-        "target": 1,
-        "reward": {"free_rolls": 15},
-        "desc": "Сжечь 1 карту редкости Legendary"
-    },
-    10: {
-        "id": 10,
         "type": "get_cards",
         "rarity": "Highlight",
         "target": 1,
         "reward": {"cents": 5000},
         "desc": "Получить 1 карту редкости Highlight через «Получить досье»"
     },
-    11: {
-        "id": 11,
-        "type": "buy_box",
-        "box": "rolls",
-        "target": 1,
+    9: {
+        "id": 9,
+        "type": "get_cards",
+        "rarity": "Rare Team-up",
+        "target": 35,
         "reward": {"rep_points": 6000},
-        "desc": "Купить Rolls-Box"
+        "desc": "Получить 35 карт редкости Rare Team-Up через «Получить досье»"
     },
-    12: {
-        "id": 12,
-        "type": "buy_box",
-        "box": "classic",
+    10: {
+        "id": 10,
+        "type": "seasonal_cards",
         "target": 1,
-        "reward": {"free_rolls": 30, "avatar": SEASONAL_AVATAR_URL},
-        "desc": "Купить Classic-Box"
+        "reward": {"free_rolls": 20, "avatar": SEASONAL_2_AVATAR_URL},
+        "desc": "Получить все карты из сезонного магазина",
+        "check_button": True
     },
 }
 
