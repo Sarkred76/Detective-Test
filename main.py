@@ -74,9 +74,9 @@ ADD_CARD_WAITING_CATCHPHRASE = "add_card_waiting_catchphrase"
 ADD_CARD_WAITING_UNIVERSE = "add_card_waiting_universe"
 
 # ===== АВАТАРКИ =====
-DEFAULT_AVATAR_URL = "https://files.catbox.moe/xtviqr.jpg" 
-SEASONAL_2_AVATAR_URL = "https://files.catbox.moe/24sc2b.jpg"
-SEASON_BOX_AVATAR_URL = "https://files.catbox.moe/24sc2b.jpg"
+DEFAULT_AVATAR_URL = "https://ibb.co/w9xrjbt" 
+SEASONAL_2_AVATAR_URL = "https://ibb.co/TM2P2Cy4"
+SEASON_BOX_AVATAR_URL = "https://ibb.co/R4NpS63v"
 FRIENDS_AVATAR_1_URL = "https://ibb.co/GQN89Nzn"
 FRIENDS_AVATAR_2_URL = "https://ibb.co/bx2cr1h"
 FRIENDS_AVATARS = [FRIENDS_AVATAR_1_URL, FRIENDS_AVATAR_2_URL]
@@ -6973,8 +6973,8 @@ async def open_season_box(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             if card:
                 seasonal_cards.append(card)
                 
-        # ⭐ Эксклюзивная карта ID 67 ⭐
-        exclusive_card = find_card_by_id(67, data["cards"])
+        # ⭐ Эксклюзивная карта ID 241 ⭐
+        exclusive_card = find_card_by_id(241, data["cards"])
         if exclusive_card and exclusive_card not in seasonal_cards:
             seasonal_cards.append(exclusive_card)
             
