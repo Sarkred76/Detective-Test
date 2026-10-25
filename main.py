@@ -8314,7 +8314,7 @@ async def burn_execute(update: Update, context: ContextTypes.DEFAULT_TYPE, card_
             await query.answer("❌ Карта не найдена!", show_alert=True)
             return
         
-        # ⭐ ИСПРАВЛЕНИЕ: Проверяем количество копий ⭐
+        # ⭐ Проверяем количество копий ⭐
         card_count = user_data["cards"].count(card_id)
         
         if card_count < 2:
@@ -8333,9 +8333,7 @@ async def burn_execute(update: Update, context: ContextTypes.DEFAULT_TYPE, card_
         user_data["cents"] = user_data.get("cents", 0) + reward["cents"]
         user_data["free_rolls"] = user_data.get("free_rolls", 0) + reward["free_rolls"]
         
-        save_data(data)
-        
-        # ⭐ ТРИГГЕРЫ КВЕСТОВ ⭐
+        # ⭐ ТРИГГЕРЫ ОБЫЧНЫХ КВЕСТОВ ⭐
         if card["rarity"] == "Common":
             await update_quest_progress(context, user_id, "burn_common_3", 1)
         elif card["rarity"] == "Rare":
@@ -8348,8 +8346,10 @@ async def burn_execute(update: Update, context: ContextTypes.DEFAULT_TYPE, card_
         if reward["free_rolls"] > 0:
             reward_parts.append(f"🔍 +{reward['free_rolls']} бесплатных попыток")
         
-        # ⭐ ИСПРАВЛЕНИЕ: Показываем, что осталось ⭐
         remaining_count = card_count - 1
+
+        # ⭐ ФЛАГ: была ли выдана награда за ивент (чтобы не перезаписать данные) ⭐
+        event_reward_claimed = False
 
         # ⭐ НОВОЕ: Проверка квеста ивента 'Темнейшая ночь' - квест 1 
         if DARKEST_NIGHT_ACTIVE and card_id in LANTERNS_CARDS_IDS:
@@ -8358,6 +8358,7 @@ async def burn_execute(update: Update, context: ContextTypes.DEFAULT_TYPE, card_
                 dn["quest_progress"]["burn_lanterns"] = dn["quest_progress"].get("burn_lanterns", 0) + 1
                 if dn["quest_progress"]["burn_lanterns"] >= 10:
                     await claim_darkest_night_reward(context, user_id, 1)
+                    event_reward_claimed = True
 
         # ⭐ НОВОЕ: Квест ивента 'Темнейшая ночь' - квест 5 ⭐
         if DARKEST_NIGHT_ACTIVE and card_id == DARK_MARK_CARD_ID:
@@ -8365,6 +8366,12 @@ async def burn_execute(update: Update, context: ContextTypes.DEFAULT_TYPE, card_
             if dn.get("active") and dn.get("current_day") == 5 and 5 not in dn.get("completed_days", []):
                 dn["quest_progress"]["burn_dark_mark"] = True
                 await claim_darkest_night_reward(context, user_id, 5)
+                event_reward_claimed = True
+        
+        # ⭐ ИСПРАВЛЕНИЕ: Сохраняем данные ТОЛЬКО если награда за ивент НЕ была выдана ⭐
+        # (Если награда выдана, функция claim_darkest_night_reward уже сохранила актуальные данные)
+        if not event_reward_claimed:
+            save_data(data)
         
         text = (
             f"✅ **Сжигание успешно!** 🔥\n\n"
