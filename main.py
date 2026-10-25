@@ -3480,10 +3480,8 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.message.reply_text("🚫 Только для администратора!")
             return
         
-        # Берём весь текст сообщения
         full_text = update.message.text
         
-        # Убираем команду "/broadcast " из начала
         if " " in full_text:
             message_text = full_text.split(" ", 1)[1]
         else:
@@ -3491,31 +3489,36 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             return
         
         if not message_text.strip():
-            await update.message.reply_text("️ Сообщение пустое!")
+            await update.message.reply_text("ℹ️ Сообщение пустое!")
             return
         
-        # ⭐ НОВОЕ: Парсинг премиум-эмодзи из синтаксиса <emoji id="12345">символ</emoji> ⭐
-        entities = []
+        # ⭐ Парсинг премиум-эмодзи ⭐
         emoji_pattern = re.compile(r'<emoji\s+id="(\d+)">(.*?)</emoji>', re.DOTALL)
         
+        # ⭐ Сначала создаём clean_text (заменяем теги на символы) ⭐
+        clean_text = emoji_pattern.sub(lambda m: m.group(2), message_text)
+        
+        # ⭐ Вычисляем entities с ПРАВИЛЬНЫМИ offset (по позициям в clean_text) ⭐
+        entities = []
         for match in emoji_pattern.finditer(message_text):
             emoji_id = match.group(1)
             emoji_symbol = match.group(2)
-            start = match.start()
-            end = match.end()
             
-            # Создаём entity для премиум-эмодзи
+            # Вычисляем позицию в clean_text
+            prefix = message_text[:match.start()]
+            clean_prefix = emoji_pattern.sub(lambda m: m.group(2), prefix)
+            
+            offset = len(clean_prefix)
+            length = len(emoji_symbol)
+            
             entities.append(
                 MessageEntity(
                     type=MessageEntity.CUSTOM_EMOJI,
-                    offset=start,
-                    length=len(emoji_symbol),
+                    offset=offset,
+                    length=length,
                     custom_emoji_id=emoji_id
                 )
             )
-        
-        # ⭐ НОВОЕ: Заменяем теги <emoji id="...">символ</emoji> на сам символ ⭐
-        clean_text = emoji_pattern.sub(lambda m: m.group(2), message_text)
         
         users = data.get("users", {})
         if not users:
@@ -3527,15 +3530,15 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         
         for i, user_id in enumerate(users.keys(), 1):
             try:
-                # ⭐ НОВОЕ: Отправляем с entities, если есть премиум-эмодзи 
                 if entities:
+                    # ⭐ Отправляем с entities (без parse_mode) ⭐
                     await context.bot.send_message(
                         chat_id=user_id,
                         text=clean_text,
-                        entities=entities,
-                        parse_mode=None  # Важно: не используем parse_mode вместе с entities
+                        entities=entities
                     )
                 else:
+                    # ⭐ Обычное сообщение без премиум-эмодзи ⭐
                     await context.bot.send_message(
                         chat_id=user_id,
                         text=clean_text
@@ -3543,10 +3546,11 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 success += 1
             except Exception as e:
                 failed += 1
+                logger.warning(f"Не удалось отправить пользователю {user_id}: {e}")
             
             if i % 5 == 0 or i == len(users):
                 await status.edit_text(
-                    f"📢 Отправлено {i}/{len(users)}\n"
+                    f" Отправлено {i}/{len(users)}\n"
                     f"✅ Успешно: {success} | ❌ Ошибок: {failed}"
                 )
         
@@ -3558,8 +3562,8 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         
     except Exception as e:
-        logger.error(f"Ошибка рассылки: {e}")
-        await update.message.reply_text("❌ Ошибка при рассылке")
+        logger.error(f"Ошибка рассылки: {e}", exc_info=True)
+        await update.message.reply_text(f"❌ Ошибка при рассылке: {e}")
 
 async def reset_all_cards(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Сброс всех карточек у всех пользователей."""
