@@ -14,7 +14,6 @@ from telegram import (
     InputMediaPhoto,
 )
 from telegram.ext import ContextTypes
-from main import DARKEST_NIGHT_ACTIVE, claim_darkest_night_reward
 
 # ⭐ ИМПОРТ ФУНКЦИЙ ИЗ MAIN.PY ⭐
 # Эти функции будут импортированы в main.py
@@ -854,7 +853,7 @@ async def trade_button_callback(update: Update, context: ContextTypes.DEFAULT_TY
                 )
             except:
                 pass
-
+            from main import DARKEST_NIGHT_ACTIVE, claim_darkest_night_reward
             # ⭐ НОВОЕ: Квест ивента 'Темнейшая ночь' - квест 6 ⭐
             if DARKEST_NIGHT_ACTIVE:
                 user_data = data["users"].get(user_id)
@@ -1044,7 +1043,7 @@ async def trade_offer_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                     )
                 except:
                     pass
-
+                from main import DARKEST_NIGHT_ACTIVE, claim_darkest_night_reward
                 # ⭐ НОВОЕ: Квест ивента 'Темнейшая ночь' - квест 6 ⭐
                 if DARKEST_NIGHT_ACTIVE:
                     user_data = data["users"].get(user_id)
