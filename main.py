@@ -13402,37 +13402,58 @@ async def claim_darkest_night_reward(context: ContextTypes.DEFAULT_TYPE, user_id
             logger.error(f"Карта #{reward_card_id} не найдена")
             return
         
-        # Добавляем карту игроку
+        # ⭐ 1. Добавляем карту игроку ⭐
         user_data["cards"].append(card["id"])
         
-        # Отмечаем день как выполненный
-        dn["completed_days"].append(day)
-        
-        # Переходим к следующему дню
-        if day < 7:
-            dn["current_day"] = day + 1
-            # Сбрасываем прогресс для квестов 2 и 4
-            if day + 1 == 2:
-                dn["quest_progress"]["no_dossier"] = True
-            elif day + 1 == 4:
-                dn["quest_progress"]["no_games"] = True
+        # ⭐ 2. Отмечаем день как выполненный ⭐
+        if day not in dn["completed_days"]:
+            dn["completed_days"].append(day)
+            
+        # ⭐ 3. УДАЛЕНО: Автоматический переход к следующему дню ⭐
+        # Теперь дни переключаются ТОЛЬКО админской командой /next_darkest_day
         
         save_data(data)
         
-        # Отправляем карту игроку с полным caption
+        # ⭐ 4. Отправляем карту игроку с полным caption (надёжный способ) ⭐
         try:
-            caption = generate_card_caption(card, user_data, count=1, show_bonus=False)
-            caption += f"\n\n <i>Награда за выполнение квеста дня {day} ивента 'Темнейшая ночь'</i>"
+            # Импортируем вспомогательные функции, если они в main.py
+            from main import get_card_media_value, is_card_animation
             
-            await send_card(context, user_id, card, caption=caption)
+            media_value = get_card_media_value(card)
+            is_anim = is_card_animation(card, media_value)
+            
+            caption = generate_card_caption(card, user_data, count=1, show_bonus=False)
+            caption += f"\n\n💀 <i>Награда за выполнение квеста дня {day} ивента 'Темнейшая ночь'</i>"
+            
+            if is_anim:
+                await context.bot.send_animation(
+                    chat_id=int(user_id),
+                    animation=media_value,
+                    caption=caption,
+                    parse_mode="HTML",
+                    supports_streaming=True
+                )
+            else:
+                await context.bot.send_photo(
+                    chat_id=int(user_id),
+                    photo=media_value,
+                    caption=caption,
+                    parse_mode="HTML"
+                )
+                
+            logger.info(f"Игрок {user_id} получил награду (карту #{reward_card_id}) за квест дня {day}")
+            
         except Exception as e:
-            logger.error(f"Ошибка отправки карты за квест {day}: {e}")
-        
-        logger.info(f"Игрок {user_id} получил награду за квест дня {day}")
+            logger.error(f"Ошибка отправки карты за квест {day}: {e}", exc_info=True)
+            # Если отправка медиа не удалась, хотя бы отправим текст
+            await context.bot.send_message(
+                chat_id=int(user_id),
+                text=f"💀 <b>Награда за квест дня {day}!</b>\n\nВы получили карту: **{card['title']}** ({card['rarity']})",
+                parse_mode="Markdown"
+            )
         
     except Exception as e:
-        logger.error(f"Ошибка в claim_darkest_night_reward: {e}")
-
+        logger.error(f"Ошибка в claim_darkest_night_reward: {e}", exc_info=True)
 async def darkest_night_claim_final(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Выдаёт финальную Limited карту за выполнение всех 7 квестов."""
     try:
