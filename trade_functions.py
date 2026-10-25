@@ -14,6 +14,7 @@ from telegram import (
     InputMediaPhoto,
 )
 from telegram.ext import ContextTypes
+from main import DARKEST_NIGHT_ACTIVE, claim_darkest_night_reward
 
 # ⭐ ИМПОРТ ФУНКЦИЙ ИЗ MAIN.PY ⭐
 # Эти функции будут импортированы в main.py
@@ -853,6 +854,16 @@ async def trade_button_callback(update: Update, context: ContextTypes.DEFAULT_TY
                 )
             except:
                 pass
+
+            # ⭐ НОВОЕ: Квест ивента 'Темнейшая ночь' - квест 6 ⭐
+            if DARKEST_NIGHT_ACTIVE:
+                user_data = data["users"].get(user_id)
+                if user_data:
+                    dn = user_data.get("darkest_night", {})
+                    if dn.get("active") and dn.get("current_day") == 6 and 6 not in dn.get("completed_days", []):
+                        dn["quest_progress"]["declined_trades"] = dn["quest_progress"].get("declined_trades", 0) + 1
+                        if dn["quest_progress"]["declined_trades"] >= 5:
+                            await claim_darkest_night_reward(context, user_id, 6)
         
     except Exception as e:
         logger.error(f"Ошибка trade_button_callback: {e}")
@@ -1033,6 +1044,16 @@ async def trade_offer_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                     )
                 except:
                     pass
+
+                # ⭐ НОВОЕ: Квест ивента 'Темнейшая ночь' - квест 6 ⭐
+                if DARKEST_NIGHT_ACTIVE:
+                    user_data = data["users"].get(user_id)
+                    if user_data:
+                        dn = user_data.get("darkest_night", {})
+                        if dn.get("active") and dn.get("current_day") == 6 and 6 not in dn.get("completed_days", []):
+                            dn["quest_progress"]["declined_trades"] = dn["quest_progress"].get("declined_trades", 0) + 1
+                            if dn["quest_progress"]["declined_trades"] >= 5:
+                                await claim_darkest_night_reward(context, user_id, 6)
         
     except Exception as e:
         logger.error(f"Ошибка trade_offer_callback: {e}")
