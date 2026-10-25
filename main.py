@@ -13483,51 +13483,70 @@ async def darkest_night_claim_final(update: Update, context: ContextTypes.DEFAUL
         logger.error(f"Ошибка в darkest_night_claim_final: {e}")
         await update.callback_query.answer("❌ Ошибка при получении награды", show_alert=True)
 
-async def check_darkest_night_daily_reset(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Проверяет и сбрасывает прогресс квестов 2 и 4 в 00:00 МСК."""
+async def next_darkest_day(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Админская команда для ручного переключения на следующий день ивента 'Темнейшая ночь'."""
     try:
-        if not DARKEST_NIGHT_ACTIVE:
+        user_id = str(update.effective_user.id)
+        data = load_data()
+        
+        if not is_admin(user_id, data):
+            await update.message.reply_text("🚫 Только для администратора!")
             return
         
-        data = load_data()
-        from datetime import datetime, timezone, timedelta
-        msk_tz = timezone(timedelta(hours=3))
-        today_str = datetime.now(msk_tz).strftime("%Y-%m-%d")
+        global DARKEST_NIGHT_ACTIVE
+        if not DARKEST_NIGHT_ACTIVE:
+            await update.message.reply_text("⚠️ Ивент 'Темнейшая ночь' не активен!")
+            return
         
-        for user_id, user_data in data["users"].items():
-            dn = user_data.get("darkest_night", {})
-            if not dn.get("active", False):
-                continue
+        advanced_count = 0
+        notified_count = 0
+        
+        # Проходим по всем пользователям и переключаем их на следующий день
+        for uid, udata in data["users"].items():
+            dn = udata.get("darkest_night", {})
             
-            last_date = dn.get("last_activity_date", "")
-            
-            # Если наступил новый день
-            if last_date != today_str:
-                current_day = dn.get("current_day", 1)
-                completed_days = dn.get("completed_days", [])
+            # Если игрок участвует и ещё не дошёл до 7-го дня
+            if dn.get("active") and dn.get("current_day", 1) < 7:
+                old_day = dn["current_day"]
+                dn["current_day"] += 1
+                new_day = dn["current_day"]
+                advanced_count += 1
                 
-                # Проверяем, выполнен ли квест предыдущего дня (для квестов 2 и 4)
-                if current_day == 2 and dn["quest_progress"].get("no_dossier", False):
-                    # Квест 2 выполнен - выдаём награду
-                    await claim_darkest_night_reward(context, user_id, 2)
-                elif current_day == 4 and dn["quest_progress"].get("no_games", False):
-                    # Квест 4 выполнен - выдаём награду
-                    await claim_darkest_night_reward(context, user_id, 4)
-                
-                # Обновляем дату
-                dn["last_activity_date"] = today_str
-                
-                # Сбрасываем прогресс для квестов 2 и 4
-                if dn.get("current_day", 1) == 2:
+                # Инициализируем флаги для квестов, требующих "бездействия" в новый день
+                if new_day == 2:
                     dn["quest_progress"]["no_dossier"] = True
-                elif dn.get("current_day", 1) == 4:
+                elif new_day == 4:
                     dn["quest_progress"]["no_games"] = True
+                
+                # Уведомляем игрока о новом дне
+                try:
+                    await context.bot.send_message(
+                        chat_id=int(uid),
+                        text=(
+                            f"💀 <b>Темнейшая ночь: День {new_day}</b>\n\n"
+                            f"Тьма сгущается... Наступил новый день!\n"
+                            f"Открой раздел «Темнейшая ночь 💀» в меню, чтобы увидеть свой новый квест."
+                        ),
+                        parse_mode="HTML"
+                    )
+                    notified_count += 1
+                except Exception:
+                    pass  # Игрок заблокировал бота, это нормально, пропускаем
         
         save_data(data)
-        logger.info("Выполнен ежедневный сброс ивента 'Темнейшая ночь'")
+        
+        await update.message.reply_text(
+            f"✅ <b>День ивента переключён!</b>\n\n"
+            f"📊 Всего активных участников: {advanced_count}\n"
+            f"📩 Уведомлений отправлено: {notified_count}\n\n"
+            f"Теперь игроки видят квест для Дня {data['users'][list(data['users'].keys())[0]]['darkest_night']['current_day'] if any(u.get('darkest_night', {}).get('active') for u in data['users'].values()) else 'N/A'}."
+        )
+        
+        logger.info(f"Админ {user_id} вручную переключил ивент 'Темнейшая ночь' на следующий день")
         
     except Exception as e:
-        logger.error(f"Ошибка в check_darkest_night_daily_reset: {e}")
+        logger.error(f"Ошибка в next_darkest_day: {e}", exc_info=True)
+        await update.message.reply_text("❌ Ошибка при переключении дня ивента")
         
 # ===== ЗАПУСК БОТА =====
 
@@ -13551,13 +13570,6 @@ def main() -> None:
             interval=60,  # Каждую минуту
             first=5,      # Через 5 секунд после старта
             name="notification_scheduler"
-        )
-
-        # Ежедневный сброс ивента в 00:00 МСК
-        context.job_queue.run_daily(
-            check_darkest_night_daily_reset,
-            time=datetime.time(0, 1),  # 00:01 МСК
-            name="darkest_night_daily_reset"
         )
         
         handlers = [
@@ -13612,6 +13624,7 @@ def main() -> None:
             CommandHandler("give_rolls_box", give_rolls_box),
             CommandHandler("cancel", cancel_command),
             CommandHandler("start_darkest_night", start_darkest_night),
+            CommandHandler("next_darkest_day", next_darkest_day),
             MessageHandler(filters.PHOTO | filters.VIDEO | filters.ANIMATION, handle_message),
             MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message),
             CallbackQueryHandler(mycards_callback, pattern=r"^(mycards_|barracks_|card_).*"),
