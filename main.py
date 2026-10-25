@@ -3469,30 +3469,53 @@ async def toggle_card(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         logger.error(f"Ошибка переключения карточки: {e}")
         await update.message.reply_text("❌ Ошибка при изменении")
 
+import re
+from telegram import MessageEntity
+
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Рассылка сообщения всем пользователям с сохранением форматирования."""
+    """Рассылка сообщения всем пользователям с поддержкой премиум-эмодзи."""
     try:
         data = load_data()
         if not is_admin(str(update.effective_user.id), data):
             await update.message.reply_text("🚫 Только для администратора!")
             return
         
-        # ⭐ ИСПРАВЛЕНИЕ: Берём весь текст сообщения, а не context.args ⭐
-        # Это сохраняет переносы строк, пробелы и форматирование
+        # Берём весь текст сообщения
         full_text = update.message.text
         
-        # ⭐ Убираем команду "/broadcast " из начала ⭐
-        # Ищем первый пробел после команды
+        # Убираем команду "/broadcast " из начала
         if " " in full_text:
-            # Берём всё после первого пробела
             message_text = full_text.split(" ", 1)[1]
         else:
             await update.message.reply_text("ℹ️ Используйте: /broadcast [текст]")
             return
         
         if not message_text.strip():
-            await update.message.reply_text("ℹ️ Сообщение пустое!")
+            await update.message.reply_text("️ Сообщение пустое!")
             return
+        
+        # ⭐ НОВОЕ: Парсинг премиум-эмодзи из синтаксиса <emoji id="12345">символ</emoji> ⭐
+        entities = []
+        emoji_pattern = re.compile(r'<emoji\s+id="(\d+)">(.*?)</emoji>', re.DOTALL)
+        
+        for match in emoji_pattern.finditer(message_text):
+            emoji_id = match.group(1)
+            emoji_symbol = match.group(2)
+            start = match.start()
+            end = match.end()
+            
+            # Создаём entity для премиум-эмодзи
+            entities.append(
+                MessageEntity(
+                    type=MessageEntity.CUSTOM_EMOJI,
+                    offset=start,
+                    length=len(emoji_symbol),
+                    custom_emoji_id=emoji_id
+                )
+            )
+        
+        # ⭐ НОВОЕ: Заменяем теги <emoji id="...">символ</emoji> на сам символ ⭐
+        clean_text = emoji_pattern.sub(lambda m: m.group(2), message_text)
         
         users = data.get("users", {})
         if not users:
@@ -3504,7 +3527,19 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         
         for i, user_id in enumerate(users.keys(), 1):
             try:
-                await context.bot.send_message(chat_id=user_id, text=message_text)
+                # ⭐ НОВОЕ: Отправляем с entities, если есть премиум-эмодзи 
+                if entities:
+                    await context.bot.send_message(
+                        chat_id=user_id,
+                        text=clean_text,
+                        entities=entities,
+                        parse_mode=None  # Важно: не используем parse_mode вместе с entities
+                    )
+                else:
+                    await context.bot.send_message(
+                        chat_id=user_id,
+                        text=clean_text
+                    )
                 success += 1
             except Exception as e:
                 failed += 1
