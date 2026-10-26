@@ -8551,18 +8551,40 @@ async def burn_all_execute(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             )
             return
         
-        # ⭐ УДАЛЯЕМ ДУБЛИКАТЫ КАРТ И ОБНОВЛЯЕМ СЕЗОННЫЕ КВЕСТЫ ⭐
+        # ⭐ УДАЛЯЕМ ДУБЛИКАТЫ КАРТ И ОБНОВЛЯЕМ СЕЗОННЫЕ КВЕСТЫ 
         for card_id, duplicates_count in cards_to_burn:
-            # ⭐ ИСПРАВЛЕНИЕ: Находим объект карты, чтобы получить её редкость ⭐
             card = find_card_by_id(card_id, data["cards"])
             if not card:
                 continue
-                
             for _ in range(duplicates_count):
                 if card_id in user_data["cards"]:
                     user_data["cards"].remove(card_id)
-                    # ⭐ ТЕПЕРЬ ЭТО РАБОТАЕТ: передаем правильную редкость ⭐
                     update_seasonal_on_burn(user_data, card["rarity"])
+                    
+                    # ⭐ НОВОЕ: Проверка квеста ивента 'Темнейшая ночь' - квест 1 (для массового сжигания) ⭐
+                    if DARKEST_NIGHT_ACTIVE and card_id in LANTERNS_CARDS_IDS:
+                        dn = user_data.get("darkest_night", {})
+                        if dn.get("active") and dn.get("current_day") == 1 and 1 not in dn.get("completed_days", []):
+                            dn["quest_progress"]["burn_lanterns"] = dn["quest_progress"].get("burn_lanterns", 0) + 1
+            
+            # ⭐ НОВОЕ: Проверка квеста 5 (тёмная метка) при массовом сжигании ⭐
+            if DARKEST_NIGHT_ACTIVE and card_id == DARK_MARK_CARD_ID:
+                dn = user_data.get("darkest_night", {})
+                if dn.get("active") and dn.get("current_day") == 5 and 5 not in dn.get("completed_days", []):
+                    dn["quest_progress"]["burn_dark_mark"] = True
+        
+        # ⭐ НОВОЕ: Проверяем выполнение квестов ПОСЛЕ цикла массового сжигания ⭐
+        dn = user_data.get("darkest_night", {})
+        if dn.get("active"):
+            # Квест 1: Сжечь 10 карт с Фонарями
+            if dn.get("current_day") == 1 and 1 not in dn.get("completed_days", []):
+                if dn["quest_progress"].get("burn_lanterns", 0) >= 10:
+                    await claim_darkest_night_reward(context, user_id, 1)
+            
+            # Квест 5: Сжечь карту с тёмной меткой
+            if dn.get("current_day") == 5 and 5 not in dn.get("completed_days", []):
+                if dn["quest_progress"].get("burn_dark_mark", False):
+                    await claim_darkest_night_reward(context, user_id, 5)
         
         # ⭐ ВЫДАЁМ НАГРАДУ ⭐
         user_data["cents"] = user_data.get("cents", 0) + total_cents
@@ -13233,6 +13255,7 @@ async def start_darkest_night(update: Update, context: ContextTypes.DEFAULT_TYPE
                     "final_reward_claimed": False
                 }
         
+        save_darkest_night_state(data)
         save_data(data)
         
         await update.message.reply_text(
@@ -13414,18 +13437,20 @@ async def claim_darkest_night_reward(context: ContextTypes.DEFAULT_TYPE, user_id
         
         save_data(data)
         
-        # ⭐ 4. Отправляем карту игроку с полным caption (надёжный способ) ⭐
+        # ⭐ Отправляем карту игроку с полным caption (прямая отправка через bot) ⭐
         try:
-            # Импортируем вспомогательные функции, если они в main.py
-            from main import get_card_media_value, is_card_animation
-            
-            media_value = get_card_media_value(card)
-            is_anim = is_card_animation(card, media_value)
+            # Определяем источник медиа и тип
+            media_source = card.get("media_source", "url")
+            media_value = card.get("file_id") if media_source == "file_id" else card.get("image_url", "")
+            is_animation = (
+                card.get("media_type") == "animation" or 
+                (isinstance(media_value, str) and media_value.lower().endswith((".mp4", ".webm", ".gif")))
+            )
             
             caption = generate_card_caption(card, user_data, count=1, show_bonus=False)
             caption += f"\n\n💀 <i>Награда за выполнение квеста дня {day} ивента 'Темнейшая ночь'</i>"
             
-            if is_anim:
+            if is_animation:
                 await context.bot.send_animation(
                     chat_id=int(user_id),
                     animation=media_value,
@@ -13444,8 +13469,8 @@ async def claim_darkest_night_reward(context: ContextTypes.DEFAULT_TYPE, user_id
             logger.info(f"Игрок {user_id} получил награду (карту #{reward_card_id}) за квест дня {day}")
             
         except Exception as e:
-            logger.error(f"Ошибка отправки карты за квест {day}: {e}", exc_info=True)
-            # Если отправка медиа не удалась, хотя бы отправим текст
+            logger.error(f"Ошибка отправки медиа карты за квест {day}: {e}", exc_info=True)
+            # Запасной вариант: если медиа не грузится, отправляем хотя бы текст
             await context.bot.send_message(
                 chat_id=int(user_id),
                 text=f"💀 <b>Награда за квест дня {day}!</b>\n\nВы получили карту: **{card['title']}** ({card['rarity']})",
@@ -13561,6 +13586,7 @@ async def next_darkest_day(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 except Exception:
                     pass  # Игрок заблокировал бота, это нормально, пропускаем
         
+        save_darkest_night_state(data)
         save_data(data)
         
         await update.message.reply_text(
@@ -13575,6 +13601,28 @@ async def next_darkest_day(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     except Exception as e:
         logger.error(f"Ошибка в next_darkest_day: {e}", exc_info=True)
         await update.message.reply_text("❌ Ошибка при переключении дня ивента")
+
+def load_darkest_night_state(data: Dict) -> None:
+    """Загружает состояние ивента 'Темнейшая ночь' из файла данных."""
+    global DARKEST_NIGHT_ACTIVE, DARKEST_NIGHT_START_DATE
+    
+    event_state = data.get("darkest_night_event", {})
+    DARKEST_NIGHT_ACTIVE = event_state.get("active", False)
+    DARKEST_NIGHT_START_DATE = event_state.get("start_date", None)
+    
+    if DARKEST_NIGHT_ACTIVE:
+        logger.info(f"Ивент 'Темнейшая ночь' загружен: активен с {DARKEST_NIGHT_START_DATE}")
+    else:
+        logger.info("Ивент 'Темнейшая ночь' не активен")
+
+
+def save_darkest_night_state(data: Dict) -> None:
+    """Сохраняет состояние ивента 'Темнейшая ночь' в файл данных."""
+    if "darkest_night_event" not in data:
+        data["darkest_night_event"] = {}
+    
+    data["darkest_night_event"]["active"] = DARKEST_NIGHT_ACTIVE
+    data["darkest_night_event"]["start_date"] = DARKEST_NIGHT_START_DATE
         
 # ===== ЗАПУСК БОТА =====
 
@@ -13599,6 +13647,9 @@ def main() -> None:
             first=5,      # Через 5 секунд после старта
             name="notification_scheduler"
         )
+
+        data = load_data()
+        load_darkest_night_state(data)
         
         handlers = [
             CommandHandler("start", start),
