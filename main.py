@@ -5131,22 +5131,26 @@ async def activate_promo_code(update: Update, context: ContextTypes.DEFAULT_TYPE
         if not context.args:
             await update.message.reply_text(
                 "ℹ️ **Формат команды:**\n"
-                "/promo [КОД]\n"
+                "/promo [КОД]\n\n"
                 "**Пример:**\n"
-                "/promo NEWCARD2024",
+                "`/promo NEWCARD2024`",
                 parse_mode="Markdown"
             )
             return
         
-        promo_code = context.args[0].upper()  # Приводим к верхнему регистру
+        promo_code = context.args[0].upper() # Приводим к верхнему регистру
+        
+        # ⭐ ИСПРАВЛЕНИЕ: Получаем данные пользователя СРАЗУ, до проверки квестов ⭐
+        user_data = data["users"].get(user_id, {})
 
         # ⭐ НОВОЕ: Квест ивента 'Темнейшая ночь' - квест 7 ⭐
         if DARKEST_NIGHT_ACTIVE and promo_code == "👅💀🦇":
             dn = user_data.get("darkest_night", {})
             if dn.get("active") and dn.get("current_day") == 7 and 7 not in dn.get("completed_days", []):
                 dn["quest_progress"]["promo_used"] = True
+                # Функция claim_darkest_night_reward сама вызовет save_data(data) внутри себя
                 await claim_darkest_night_reward(context, user_id, 7)
-        
+
         # Проверяем существование промокода
         if promo_code not in data["promo_codes"]:
             await update.message.reply_text(
@@ -5158,7 +5162,6 @@ async def activate_promo_code(update: Update, context: ContextTypes.DEFAULT_TYPE
         promo_info = data["promo_codes"][promo_code]
         
         # Проверяем, не использовал ли игрок этот промокод раньше
-        user_data = data["users"].get(user_id, {})
         used_promo_codes = user_data.get("used_promo_codes", [])
         if promo_code in used_promo_codes:
             await update.message.reply_text(
@@ -5170,45 +5173,23 @@ async def activate_promo_code(update: Update, context: ContextTypes.DEFAULT_TYPE
         # Проверяем лимит использований
         if promo_info["current_uses"] >= promo_info["max_uses"]:
             await update.message.reply_text(
-                "❌ **Лимит активаций исчерпан!**\n"
-                "Этот промокод больше не действителен."
+                "❌ **Лимит активаций исчерпан!**"
             )
             return
-        
-        # ⭐ ПРОВЕРЯЕМ ТИП КАРТЫ (СЛУЧАЙНАЯ ИЛИ КОНКРЕТНАЯ) ⭐
-        is_random = promo_info.get("is_random", False)
-        
-        if is_random:
-            # ⭐ ВЫБИРАЕМ СЛУЧАЙНУЮ КАРТУ ИЗ ДОСТУПНЫХ ⭐
-            available_cards = [
-                card for card in data["cards"]
-                if card.get("available", True)
-            ]
-            
-            if not available_cards:
-                await update.message.reply_text(
-                    "❌ **Ошибка!**\n"
-                    "В системе нет доступных карт для выдачи."
-                )
-                return
-            
-            # Выбираем случайную карту
-            card = random.choice(available_cards)
-            card_id = card["id"]
-        else:
-            # ⭐ СТАРАЯ ЛОГИКА: КОНКРЕТНАЯ КАРТА ⭐
-            card_id = promo_info["card_id"]
-            card = find_card_by_id(card_id, data["cards"])
-            if not card:
-                await update.message.reply_text(
-                    "❌ **Ошибка!**\n"
-                    "Карта для этого промокода больше не существует."
-                )
-                return
-        
-        # Проверяем, существует ли пользователь в базе
+
+        # Получаем карту из промокода
+        card_id = promo_info["card_id"]
+        card = find_card_by_id(card_id, data["cards"])
+        if not card:
+            await update.message.reply_text(
+                "❌ **Ошибка!**\n"
+                "Карта для этого промокода больше не существует."
+            )
+            return
+
+        # Если пользователя нет в базе (на всякий случай), создаем запись
         if user_id not in data["users"]:
-            user_data = {
+            data["users"][user_id] = {
                 "username": update.effective_user.username or "",
                 "first_name": update.effective_user.first_name or "",
                 "last_name": update.effective_user.last_name or "",
@@ -5221,32 +5202,23 @@ async def activate_promo_code(update: Update, context: ContextTypes.DEFAULT_TYPE
                 "last_dice_time": 0,
                 "used_promo_codes": []
             }
-            data["users"][user_id] = user_data
-        
-        # Добавляем карту игроку
-        data["users"][user_id]["cards"].append(card_id)
-        
-        # Отмечаем промокод как использованный
-        data["users"][user_id]["used_promo_codes"].append(promo_code)
-        
-        # Увеличиваем счётчик использований
-        data["promo_codes"][promo_code]["current_uses"] += 1
+            user_data = data["users"][user_id] # Обновляем ссылку на свежего пользователя
+
+        # Выдаем карту
+        user_data["cards"].append(card["id"])
+        user_data["used_promo_codes"].append(promo_code)
+        promo_info["current_uses"] += 1
         
         save_data(data)
         
         # Отправляем карту игроку
-        caption = (
-            f"🎉 Промокод активирован!\n"
-            f"🃏 Вы получили: {card['title']}\n"
-            f"🌟 Редкость: {card['rarity']}\n"
-            f"Приятной игры!"
-        )
+        caption = f"🎉 **Промокод активирован!**\n\nВы получили карту: **{card['title']}**\n🌟 Редкость: {card['rarity']}"
         await send_card(update, card, context, caption=caption)
         
-        logger.info(f"Игрок {user_id} активировал промокод {promo_code} {'(случайная карта)' if is_random else ''}")
+        logger.info(f"Игрок {user_id} активировал промокод {promo_code}")
         
     except Exception as e:
-        logger.error(f"Ошибка activate_promo_code: {e}")
+        logger.error(f"Ошибка activate_promo_code: {e}", exc_info=True)
         await update.message.reply_text("❌ Ошибка при активации промокода")
 
 async def delete_promo_code(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
