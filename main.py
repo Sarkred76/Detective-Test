@@ -13434,19 +13434,13 @@ async def claim_darkest_night_reward(context: ContextTypes.DEFAULT_TYPE, user_id
             logger.error(f"Карта #{reward_card_id} не найдена")
             return
         
-        # ⭐ 1. Добавляем карту игроку ⭐
+        # 1. Добавляем карту игроку и сохраняем данные СРАЗУ
         user_data["cards"].append(card["id"])
-        
-        # ⭐ 2. Отмечаем день как выполненный ⭐
         if day not in dn["completed_days"]:
             dn["completed_days"].append(day)
-            
-        # ⭐ 3. УДАЛЕНО: Автоматический переход к следующему дню ⭐
-        # Теперь дни переключаются ТОЛЬКО админской командой /next_darkest_day
-        
         save_data(data)
         
-        # ⭐ Отправляем карту игроку с полным caption (прямая отправка через bot) ⭐
+        # 2. Отправляем карту игроку с полным caption (с обработкой ошибок)
         try:
             # Определяем источник медиа и тип
             media_source = card.get("media_source", "url")
@@ -13478,16 +13472,29 @@ async def claim_darkest_night_reward(context: ContextTypes.DEFAULT_TYPE, user_id
             logger.info(f"Игрок {user_id} получил награду (карту #{reward_card_id}) за квест дня {day}")
             
         except Exception as e:
-            logger.error(f"Ошибка отправки медиа карты за квест {day}: {e}", exc_info=True)
-            # Запасной вариант: если медиа не грузится, отправляем хотя бы текст
-            await context.bot.send_message(
-                chat_id=int(user_id),
-                text=f"💀 <b>Награда за квест дня {day}!</b>\n\nВы получили карту: **{card['title']}** ({card['rarity']})",
-                parse_mode="Markdown"
-            )
+            error_str = str(e).lower()
+            
+            # Игнорируем ошибки неактивных пользователей
+            if "chat not found" in error_str or "bot was blocked" in error_str or "bot can't initiate conversation" in error_str:
+                # Пользователь заблокировал бота или не запускал его - просто пропускаем
+                logger.debug(f"Не удалось отправить награду игроку {user_id}: пользователь неактивен")
+            else:
+                # Логируем только реальные ошибки
+                logger.error(f"Ошибка отправки медиа карты за квест {day} игроку {user_id}: {e}", exc_info=True)
+                # Запасной вариант: если медиа не грузится, отправляем хотя бы текст
+                try:
+                    await context.bot.send_message(
+                        chat_id=int(user_id),
+                        text=f"💀 <b>Награда за квест дня {day}!</b>\n\nВы получили карту: **{card['title']}** ({card['rarity']})",
+                        parse_mode="Markdown"
+                    )
+                except Exception:
+                    # Если даже текст не отправляется - пользователь точно неактивен
+                    pass
         
     except Exception as e:
-        logger.error(f"Ошибка в claim_darkest_night_reward: {e}", exc_info=True)
+        logger.error(f"Критическая ошибка в claim_darkest_night_reward: {e}", exc_info=True)
+        
 async def darkest_night_claim_final(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Выдаёт финальную Limited карту за выполнение всех 7 квестов."""
     try:
@@ -13578,7 +13585,6 @@ async def next_darkest_day(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                     # ⚠️ В ПРОДАКШЕНЕ заменить на 86400 (24 часа)
                     if time_passed >= 300 and dn["quest_progress"].get("no_dossier", False):
                         rewards_to_claim.append((uid, 2))
-                    # Если игрок нажимал "Получить досье", no_dossier уже False - квест провален
                 
                 # Квест 4: не играть в игры
                 if old_day == 4:
@@ -13602,7 +13608,7 @@ async def next_darkest_day(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                     dn["quest_progress"]["no_games"] = True
                     dn["quest_4_start_time"] = int(time.time())
                 
-                # Уведомляем игрока
+                # ⭐ Уведомляем игрока с защитой от ошибок неактивных чатов ⭐
                 try:
                     await context.bot.send_message(
                         chat_id=int(uid),
@@ -13614,18 +13620,29 @@ async def next_darkest_day(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                         parse_mode="HTML"
                     )
                     notified_count += 1
-                except Exception:
-                    pass
+                except Exception as e:
+                    error_str = str(e).lower()
+                    # Молча пропускаем заблокированных/удаленных пользователей
+                    if "chat not found" in error_str or "bot was blocked" in error_str or "bot can't initiate conversation" in error_str:
+                        pass
+                    else:
+                        # Логируем только реальные, неожиданные ошибки
+                        logger.warning(f"Не удалось уведомить игрока {uid} о новом дне: {e}")
         
         save_data(data)
         
-        # ⭐ ВЫДАЁМ НАГРАДЫ ЗА КВЕСТЫ 2 И 4 (после сохранения основных данных) ⭐
+        # ⭐ ВЫДАЁМ НАГРАДЫ ЗА КВЕСТЫ 2 И 4 (с защитой от спама в логах) ⭐
         for uid, day in rewards_to_claim:
             try:
                 await claim_darkest_night_reward(context, uid, day)
                 logger.info(f"Игрок {uid} автоматически выполнил квест дня {day}")
             except Exception as e:
-                logger.error(f"Ошибка выдачи награды за квест {day} игроку {uid}: {e}")
+                error_str = str(e).lower()
+                # Игнорируем ошибки неактивных пользователей при выдаче награды
+                if "chat not found" in error_str or "bot was blocked" in error_str or "bot can't initiate conversation" in error_str:
+                    pass
+                else:
+                    logger.error(f"Ошибка выдачи награды за квест {day} игроку {uid}: {e}")
         
         # Определяем текущий день для отчёта
         current_day_display = "N/A"
