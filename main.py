@@ -13381,15 +13381,26 @@ async def darkest_night_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
         is_completed = progress >= target
         
+        # ⭐ Формируем основную часть текста ⭐
         text = (
             f"💀 <b>Темнейшая ночь</b>\n\n"
             f"🏆 <b>Восстань!</b>\n\n"
             f"📅 <b>День {current_day}/7</b>\n\n"
             f"{quest_text}\n\n"
-            f"📊 Прогресс: {min(progress, target)}/{target}\n"
-            f"{'✅ Квест выполнен! Награда начислена.' if is_completed else '⏳ Продолжайте выполнение...'}\n\n"
-            f"🏆 Выполнено квестов: {len(completed_days)}/7"
         )
+        
+        # ⭐ НОВОЕ: Для пассивных квестов (2 и 4) скрываем прогресс и статус выполнения ⭐
+        if current_day in [2, 4]:
+            text += "⏳ <i>Ожидайте переключения дня администратором для проверки выполнения квеста.</i>\n\n"
+        else:
+            # Для активных квестов (1, 3, 5, 6, 7) показываем прогресс как обычно
+            text += (
+                f"📊 Прогресс: {min(progress, target)}/{target}\n"
+                f"{'✅ Квест выполнен! Награда начислена.' if is_completed else '⏳ Продолжайте выполнение...'}\n\n"
+            )
+        
+        # Общая статистика для всех дней
+        text += f"🏆 Выполнено квестов: {len(completed_days)}/7"
         
         keyboard = [[InlineKeyboardButton("🔙 Назад в меню", callback_data="submenu")]]
         
