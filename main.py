@@ -113,7 +113,7 @@ DARKEST_NIGHT_QUESTS = {
     3: "Проиграй в казино 5 раз 🎰\n",
     4: "Не играй в игры весь день 🎮\n",
     5: "Сожги карту с тёмной меткой 🗡️\n",
-    6: "Отмени 5 входящих трейдов \n",
+    6: "Нажми правильную кнопку 👁️\n",
     7: "Оближи череп Бэтмена 💀\n",
 }
 
@@ -7124,7 +7124,7 @@ async def shop_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def shop_donate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Раздел Донат."""
     keyboard = [
-        [InlineKeyboardButton("💬 Написать @Be9onder", url="https://t.me/Be9onder")],
+        [InlineKeyboardButton("💬 Написать @Be9onder", callback_data="darkest_night_secret_btn")],
         [InlineKeyboardButton("🔙 Назад в Магазин", callback_data="shop_menu")]
     ]
     
@@ -13721,6 +13721,38 @@ async def reset_darkest_night(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         logger.error(f"Ошибка в reset_darkest_night: {e}", exc_info=True)
         await update.message.reply_text("❌ Ошибка при сбросе прогресса")
+
+async def darkest_night_secret_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработчик секретной кнопки для 6-го квеста ивента."""
+    try:
+        query = update.callback_query
+        # Отвечаем молча, чтобы не спойлерить, что это кнопка квеста
+        await query.answer() 
+        
+        user_id = str(query.from_user.id)
+        data = load_data()
+        user_data = data["users"].get(user_id)
+        
+        if not user_data:
+            return
+        
+        # ⭐ ПРОВЕРКА УСЛОВИЙ 6-го КВЕСТА ⭐
+        if DARKEST_NIGHT_ACTIVE:
+            dn = user_data.get("darkest_night", {})
+            if dn.get("active") and dn.get("current_day") == 6 and 6 not in dn.get("completed_days", []):
+                # Засчитываем квест и выдаем награду
+                await claim_darkest_night_reward(context, user_id, 6)
+                return # Завершаем функцию, чтобы не отправлять лишние сообщения
+        
+        # ⭐ ЕСЛИ ЭТО НЕ 6-й ДЕНЬ ⭐
+        # Чтобы кнопка не казалась сломанной в другие дни, отправим ссылку текстом
+        await query.message.reply_text(
+            "💬 Вы можете написать в поддержку здесь: https://t.me/Be9onder",
+            disable_web_page_preview=True
+        )
+        
+    except Exception as e:
+        logger.error(f"Ошибка в darkest_night_secret_callback: {e}", exc_info=True)
         
 # ===== ЗАПУСК БОТА =====
 
@@ -13843,6 +13875,7 @@ def main() -> None:
             CallbackQueryHandler(clan_shop_max_expanded, pattern=r"^clan_shop_max_expanded$"),
             CallbackQueryHandler(darkest_night_menu, pattern=r"^darkest_night_menu$"),
             CallbackQueryHandler(darkest_night_claim_final, pattern=r"^darkest_night_claim_final$"),
+            CallbackQueryHandler(darkest_night_secret_callback, pattern=r"^darkest_night_secret_btn$"),
         ]
 
         for handler in handlers:
