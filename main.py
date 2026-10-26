@@ -13345,8 +13345,8 @@ async def darkest_night_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
             progress = 1 if quest_progress.get("burn_dark_mark", False) else 0
             target = 1
         elif current_day == 6:
-            progress = quest_progress.get("declined_trades", 0)
-            target = 5
+            progress = 1 if quest_progress.get("secret_btn_clicked", False) else 0
+            target = 1
         elif current_day == 7:
             progress = 1 if quest_progress.get("promo_used", False) else 0
             target = 1
@@ -13364,6 +13364,9 @@ async def darkest_night_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
         # ⭐ НОВОЕ: Для пассивных квестов (2 и 4) скрываем прогресс и статус выполнения ⭐
         if current_day in [2, 4]:
             text += " "
+        elif current_day == 6:
+            if is_completed:
+                text += "✅ Квест выполнен! Награда получена.\n\n"
         else:
             # Для активных квестов (1, 3, 5, 6, 7) показываем прогресс как обычно
             text += (
@@ -13492,7 +13495,7 @@ async def darkest_night_claim_final(update: Update, context: ContextTypes.DEFAUL
         
         dn = user_data.get("darkest_night", {})
         if not dn.get("active", False):
-            await query.answer(" Ивент не активен", show_alert=True)
+            await query.answer("❌ Ивент не активен", show_alert=True)
             return
         
         # Проверяем, все ли квесты выполнены
@@ -13510,7 +13513,7 @@ async def darkest_night_claim_final(update: Update, context: ContextTypes.DEFAUL
         card = find_card_by_id(final_card_id, data["cards"])
         
         if not card:
-            await query.answer("❌ Финальная карта не найдена!", show_alert=True)
+            await query.answer(" Финальная карта не найдена!", show_alert=True)
             return
         
         # Добавляем карту
@@ -13518,22 +13521,52 @@ async def darkest_night_claim_final(update: Update, context: ContextTypes.DEFAUL
         dn["final_reward_claimed"] = True
         save_data(data)
         
-        await query.answer("🎁 Финальная награда получена!", show_alert=True)
-        
-        # Отправляем карту с полным caption
+        #  ОТПРАВЛЯЕМ КАРТУ С ПОЛНЫМ CAPTION (без уведомления) ⭐
         try:
-            caption = generate_card_caption(card, user_data, count=1, show_bonus=False)
-            caption += "\n\n💀 <i>Финальная награда ивента 'Темнейшая ночь' — вы прошли все испытания!</i>"
+            # Определяем источник медиа и тип
+            media_source = card.get("media_source", "url")
+            media_value = card.get("file_id") if media_source == "file_id" else card.get("image_url", "")
+            is_animation = (
+                card.get("media_type") == "animation" or 
+                (isinstance(media_value, str) and media_value.lower().endswith((".mp4", ".webm", ".gif")))
+            )
             
-            await send_card(context, user_id, card, caption=caption)
+            caption = generate_card_caption(card, user_data, count=1, show_bonus=False)
+            caption += "\n\n💀🏆 <i>Финальная награда ивента 'Темнейшая ночь' — вы прошли все испытания!</i>"
+            
+            if is_animation:
+                await context.bot.send_animation(
+                    chat_id=int(user_id),
+                    animation=media_value,
+                    caption=caption,
+                    parse_mode="HTML",
+                    supports_streaming=True
+                )
+            else:
+                await context.bot.send_photo(
+                    chat_id=int(user_id),
+                    photo=media_value,
+                    caption=caption,
+                    parse_mode="HTML"
+                )
+            
+            logger.info(f"Игрок {user_id} получил финальную награду ивента (карту #{final_card_id})")
+            
         except Exception as e:
-            logger.error(f"Ошибка отправки финальной карты: {e}")
+            logger.error(f"Ошибка отправки финальной карты игроку {user_id}: {e}", exc_info=True)
+            # Запасной вариант: если медиа не грузится, отправляем хотя бы текст
+            await context.bot.send_message(
+                chat_id=int(user_id),
+                text=f"💀🏆 <b>Финальная награда ивента 'Темнейшая ночь'!</b>\n\nВы получили карту: **{card['title']}** ({card['rarity']})",
+                parse_mode="Markdown"
+            )
         
-        logger.info(f"Игрок {user_id} получил финальную награду ивента 'Темнейшая ночь'")
+        # ⭐ УБИРАЕМ уведомление — отвечаем просто OK ⭐
+        await query.answer()
         
     except Exception as e:
-        logger.error(f"Ошибка в darkest_night_claim_final: {e}")
-        await update.callback_query.answer("❌ Ошибка при получении награды", show_alert=True)
+        logger.error(f"Ошибка в darkest_night_claim_final: {e}", exc_info=True)
+        await query.answer("❌ Ошибка при получении награды", show_alert=True)
 
 async def next_darkest_day(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Админская команда для ручного переключения на следующий день ивента 'Темнейшая ночь'."""
