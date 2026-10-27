@@ -1,5 +1,5 @@
 import json
-import psycopg2
+import psycopg
 import os
 
 # Данные для подключения к БД на Amvera
@@ -25,7 +25,7 @@ def migrate():
         data = json.load(f)
     
     print("🔌 Подключение к PostgreSQL...")
-    conn = psycopg2.connect(**DB_CONFIG)
+    conn = psycopg.connect(**DB_CONFIG, autocommit=False)
     cur = conn.cursor()
     
     # 1. Перенос карт
@@ -99,7 +99,7 @@ def migrate():
     print(f"✅ Перенесено карт в инвентарь: {inventory_count}")
     
     # 3. Перенос кланов
-    print("\n Перенос кланов...")
+    print("\n🔄 Перенос кланов...")
     clans_count = 0
     members_count = 0
     
@@ -120,7 +120,7 @@ def migrate():
                 members_count += 1
                 
         except Exception as e:
-            print(f"️ Ошибка при переносе клана {clan_id}: {e}")
+            print(f"⚠️ Ошибка при переносе клана {clan_id}: {e}")
     
     print(f"✅ Перенесено кланов: {clans_count}")
     print(f"✅ Перенесено участников кланов: {members_count}")
