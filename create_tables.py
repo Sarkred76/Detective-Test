@@ -3,7 +3,7 @@ import psycopg
 DB_CONFIG = {
     "dbname": "DetectiveCards",
     "user": "Sarkred",
-    "password": "7dEd6iJx8d2_!TP",  # ⚠️ ЗАМЕНИ НА СВОЙ ПАРОЛЬ
+    "password": "7YskhYBxHAN4g",  # ⚠️ ЗАМЕНИ НА СВОЙ ПАРОЛЬ
     "host": "cnpg-dccards-rw",
     "port": "5432"
 }
