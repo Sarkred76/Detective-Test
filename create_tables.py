@@ -11,7 +11,7 @@ DB_CONFIG = {
 def create_tables():
     print("🔌 Подключение к базе данных...")
     try:
-        conn = psycopg2.connect(**DB_CONFIG)
+        conn = psycopg.connect(**DB_CONFIG)
         cur = conn.cursor()
         
         print("📖 Чтение файла create_tables.sql...")
@@ -27,7 +27,7 @@ def create_tables():
         cur.close()
         conn.close()
         
-    except psycopg2.Error as e:
+    except psycopg.Error as e:
         print(f"❌ Ошибка базы данных: {e}")
     except FileNotFoundError:
         print("❌ Файл create_tables.sql не найден!")
