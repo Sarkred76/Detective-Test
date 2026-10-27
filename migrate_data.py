@@ -15,7 +15,7 @@ def migrate():
     print(" Чтение JSON файла...")
     
     # Путь к файлу данных на Amvera
-    data_file = "/data/bot_data.json"
+    data_file = "bot_data.json"
     
     if not os.path.exists(data_file):
         print(f"❌ Файл {data_file} не найден!")
