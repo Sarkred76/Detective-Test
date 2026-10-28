@@ -4071,7 +4071,7 @@ async def edit_card(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             return
         
         # ⭐ ДОБАВЛЯЕМ universe В СПИСОК ДОПУСТИМЫХ ПАРАМЕТРОВ ⭐
-        valid_params = ["title", "url", "rarity", "available", "catchphrase", "universe"]
+        valid_params = ["title", "url", "rarity", "available", "catchphrase", "universe", 'media_type']
         if param not in valid_params:
             await update.message.reply_text(
                 f"⚠️ Неверный параметр! Доступные: {', '.join(valid_params)}"
@@ -4084,6 +4084,18 @@ async def edit_card(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             new_value_bool = new_value.lower() in ["true", "1", "yes", "вкл", "on", "да"]
             card[param] = new_value_bool
             display_new = new_value_bool
+            display_old = old_value
+        elif param == "media_type":
+            # ⭐ НОВОЕ: Изменение типа медиа (photo/animation) 
+            new_media_type = new_value.lower()
+            if new_media_type not in ['photo', 'animation']:
+                await update.message.reply_text(
+                    "⚠️ Неверное значение! Используйте 'photo' или 'animation'"
+                )
+                return
+    
+            card["media_type"] = new_media_type
+            display_new = new_media_type
             display_old = old_value
             
         # ⭐ НОВОЕ: ОБРАБОТКА ПАРАМЕТРА universe ⭐
