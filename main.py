@@ -88,6 +88,7 @@ DEFAULT_CLAN_AVATAR = None  # None означает отсутствие ава�
 DARKEST_NIGHT_ACTIVE = False  # Статус ивента (True = активен)
 DARKEST_NIGHT_START_DATE = None  # Дата начала (заполняется при запуске)
 DARKEST_NIGHT_DURATION = 7  # Длительность в днях
+DARKEST_NIGHT_3_QUESTS_AVATAR_URL = "https://ibb.co/N21QRpJ7" 
 
 # ID карт-наград за каждый день (заполни сам)
 DARKEST_NIGHT_REWARDS = {
@@ -13233,7 +13234,10 @@ async def start_darkest_night(update: Update, context: ContextTypes.DEFAULT_TYPE
                         "promo_used": False,           # Квест 7
                     },
                     "last_activity_date": DARKEST_NIGHT_START_DATE,
-                    "final_reward_claimed": False
+                    "final_reward_claimed": False,
+                    "quest_2_start_time": 0,
+                    "quest_4_start_time": 0,
+                    "avatar_3_claimed": False,
                 }
         
         save_darkest_night_state(data)
@@ -13425,6 +13429,41 @@ async def claim_darkest_night_reward(context: ContextTypes.DEFAULT_TYPE, user_id
         if day not in dn["completed_days"]:
             dn["completed_days"].append(day)
         save_data(data)
+
+        # ⭐ НОВОЕ: Проверяем, не пора ли выдать аватарку за 3 квеста ⭐
+        avatar_just_claimed = False
+        if len(dn["completed_days"]) == 3 and not dn.get("avatar_3_claimed", False):
+            avatar_url = DARKEST_NIGHT_3_QUESTS_AVATAR_URL
+            if avatar_url and avatar_url != "СЮДА_ВСТАВЬ_URL_АВАТАРКИ":
+                try:
+                    # Добавляем аватарку в коллекцию игрока
+                    avatars = user_data.setdefault("avatars", [])
+                    if avatar_url not in avatars:
+                        avatars.append(avatar_url)
+                    
+                    # Отмечаем, что аватарка выдана
+                    dn["avatar_3_claimed"] = True
+                    save_data(data)
+                    
+                    # Отправляем игроку изображение аватарки
+                    await context.bot.send_photo(
+                        chat_id=int(user_id),
+                        photo=avatar_url,
+                        caption=(
+                            f"🎭 <b>Новая аватарка разблокирована!</b>\n\n"
+                            f"💀 Вы выполнили 3 квеста ивента <b>«Темнейшая ночь»</b>!\n"
+                            f"🖼 Эта эксклюзивная аватарка теперь в вашей коллекции.\n\n"
+                            f"💡 <i>Выбрать её можно в разделе «Профиль → Мои аватарки».</i>"
+                        ),
+                        parse_mode="HTML"
+                    )
+                    avatar_just_claimed = True
+                    logger.info(f"Игрок {user_id} получил аватарку за 3 квеста ивента")
+                except Exception as avatar_error:
+                    error_str = str(avatar_error).lower()
+                    if "chat not found" not in error_str and "bot was blocked" not in error_str:
+                        logger.error(f"Ошибка отправки аватарки игроку {user_id}: {avatar_error}")
+        
         
         # 2. Отправляем карту игроку с полным caption (с обработкой ошибок)
         try:
@@ -13532,7 +13571,7 @@ async def darkest_night_claim_final(update: Update, context: ContextTypes.DEFAUL
             )
             
             caption = generate_card_caption(card, user_data, count=1, show_bonus=False)
-            caption += "\n\n💀🏆 <i>Финальная награда ивента 'Темнейшая ночь' — вы прошли все испытания!</i>"
+            caption += "\n\n💀🏆 Финальная награда ивента Темнейшая ночь — вы прошли все испытания!"
             
             if is_animation:
                 await context.bot.send_animation(
@@ -13557,7 +13596,7 @@ async def darkest_night_claim_final(update: Update, context: ContextTypes.DEFAUL
             # Запасной вариант: если медиа не грузится, отправляем хотя бы текст
             await context.bot.send_message(
                 chat_id=int(user_id),
-                text=f"💀🏆 <b>Финальная награда ивента 'Темнейшая ночь'!</b>\n\nВы получили карту: **{card['title']}** ({card['rarity']})",
+                text=f"💀🏆 Финальная награда ивента Темнейшая ночь!\n\nВы получили карту: **{card['title']}** ({card['rarity']})",
                 parse_mode="Markdown"
             )
         
@@ -13738,6 +13777,7 @@ async def reset_darkest_night(update: Update, context: ContextTypes.DEFAULT_TYPE
                 dn["final_reward_claimed"] = False
                 dn["quest_2_start_time"] = 0
                 dn["quest_4_start_time"] = 0
+                dn["avatar_3_claimed"] = False
                 reset_count += 1
         
         save_data(data)
