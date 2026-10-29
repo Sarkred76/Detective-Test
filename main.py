@@ -3,6 +3,7 @@ import json
 import asyncio
 import threading
 import os
+import db
 import re
 import html
 import random
@@ -13838,6 +13839,46 @@ async def darkest_night_secret_callback(update: Update, context: ContextTypes.DE
         
     except Exception as e:
         logger.error(f"Ошибка в darkest_night_secret_callback: {e}", exc_info=True)
+
+async def test_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Тестовая команда для проверки работы с PostgreSQL."""
+    try:
+        user_id = str(update.effective_user.id)
+        
+        # 1. Получаем данные пользователя из БД
+        user_data = await db.get_user(user_id)
+        
+        if not user_data:
+            # Если пользователя нет — создаем
+            await db.create_user_if_not_exists(
+                user_id, 
+                update.effective_user.username,
+                update.effective_user.first_name
+            )
+            user_data = await db.get_user(user_id)
+            await update.message.reply_text(
+                f"✅ Вы зарегистрированы в базе!\n\n"
+                f"ID: {user_id}\n"
+                f"Имя: {update.effective_user.first_name}"
+            )
+            return
+        
+        # 2. Показываем данные
+        cards_count = len(user_data.get('cards', []))
+        cents = user_data.get('cents', 0)
+        
+        await update.message.reply_text(
+            f"🗄️ **Данные из PostgreSQL:**\n\n"
+            f" ID: {user_id}\n"
+            f"💰 Баланс: {cents} бэт-коинов\n"
+            f"🃏 Карт в коллекции: {cards_count}\n"
+            f"🎲 Бесплатных попыток: {user_data.get('free_rolls', 0)}\n\n"
+            f"✅ База данных работает!"
+        )
+        
+    except Exception as e:
+        logger.error(f"Ошибка в test_db_command: {e}", exc_info=True)
+        await update.message.reply_text(f"❌ Ошибка: {e}")
         
 # ===== ЗАПУСК БОТА =====
 
@@ -13919,7 +13960,8 @@ def main() -> None:
             CommandHandler("cancel", cancel_command),
             CommandHandler("start_darkest_night", start_darkest_night),
             CommandHandler("next_darkest_day", next_darkest_day),
-            CommandHandler("reset_darkest_night", reset_darkest_night), 
+            CommandHandler("reset_darkest_night", reset_darkest_night),
+            CommandHandler("test_db", test_db_command),
             MessageHandler(filters.PHOTO | filters.VIDEO | filters.ANIMATION, handle_message),
             MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message),
             CallbackQueryHandler(mycards_callback, pattern=r"^(mycards_|barracks_|card_).*"),
