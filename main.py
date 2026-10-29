@@ -864,42 +864,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /start с поддержкой реферальной системы."""
     try:
         user_id = str(update.effective_user.id)
-        data = load_data()
-
-        # ⭐ 1. СНАЧАЛА проверяем, является ли пользователь НОВЫМ (до любых изменений в data["users"]) ⭐
-        is_new_user = user_id not in data["users"]
-
-        # ⭐ 2. Если пользователь новый — создаем для него профиль ⭐
+        
+        # 1. Пытаемся получить пользователя из БД
+        user_data = await db.get_user(user_id)
+        is_new_user = user_data is None
+        
+        # 2. Если пользователь новый — создаем его в БД
         if is_new_user:
-            from datetime import datetime, timezone, timedelta
-            msk_tz = timezone(timedelta(hours=3))
-            today_str = datetime.now(msk_tz).strftime("%Y-%m-%d")
-            
-            data["users"][user_id] = {
-                "username": update.effective_user.username or "",
-                "first_name": update.effective_user.first_name or "",
-                "last_name": update.effective_user.last_name or "",
-                "cards": [],
-                "total_points": 0,
-                "season_points": 0,
-                "cents": 0,
-                "last_card_time": 0,
-                "free_rolls": 0,
-                "last_dice_time": 0,
-                "casino_attempts": 5,
-                "last_casino_reset": 0,
-                "used_promo_codes": [],
-                "referral_invites": [],
-                "referral_rewards_claimed": [],
-                "daily_quests": [],
-                "weekly_quests": [],
-                "avatar_url": DEFAULT_AVATAR_URL,
-                "avatars": [DEFAULT_AVATAR_URL],
-                "pending_season_boxes": 0,
-                "last_daily_activity": None,
-                "registered_at": today_str,
-            }
-            save_data(data)
+            await db.create_user_if_not_exists(
+                user_id, 
+                update.effective_user.username,
+                update.effective_user.first_name
+            )
+            # Получаем свежие данные только что созданного пользователя
+            user_data = await db.get_user(user_id)
+            logger.info(f"Новый игрок зарегистрирован в БД: {user_id}")
 
         # ⭐ 3. ОБРАБОТКА РЕФЕРАЛЬНОЙ ССЫЛКИ (используем значение is_new_user, полученное в шаге 1) ⭐
         if is_new_user and context.args and len(context.args) > 0 and context.args[0].startswith("ref_"):
@@ -1972,14 +1951,19 @@ async def my_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             chat_id = update.effective_chat.id
             is_callback = False
         
-        data = load_data()
-        user_data = data["users"].get(user_id)
+        # Получаем данные пользователя ИЗ БАЗЫ ДАННЫХ
+        user_data = await db.get_user(user_id)
+    
         if not user_data:
-            if is_callback:
-                await query.edit_message_text("❌ Вы ещё не начали игру!\nНажмите /start")
+            text = "❌ Вы ещё не начали игру! Нажмите /start"
+            if hasattr(update, 'callback_query') and update.callback_query:
+                await update.callback_query.edit_message_text(text)
             else:
-                await update.message.reply_text("❌ Вы ещё не начали игру!\nНажмите /start")
+                await update.message.reply_text(text)
             return
+
+        # Получаем список всех карт из БД (для подсчета статистики по редкости)
+        all_cards = await db.get_all_cards()
         
         # ⭐ Миграция для старых пользователей ⭐
         if "avatar_url" not in user_data:
