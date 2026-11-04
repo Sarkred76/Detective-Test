@@ -13853,7 +13853,7 @@ async def next_darkest_day(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                     time_passed = int(time.time()) - quest_start
                     # ⚠️ ВРЕМЕННО ДЛЯ ТЕСТА: 5 минут (300 сек). 
                     # ⚠️ В ПРОДАКШЕНЕ заменить на 86400 (24 часа)
-                    if time_passed >= 79200 and dn["quest_progress"].get("no_dossier", False):
+                    if time_passed >= 60 and dn["quest_progress"].get("no_dossier", False):
                         rewards_to_claim.append((uid, 2))
                 
                 # Квест 4: не играть в игры
@@ -13862,7 +13862,7 @@ async def next_darkest_day(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                     time_passed = int(time.time()) - quest_start
                     # ⚠️ ВРЕМЕННО ДЛЯ ТЕСТА: 5 минут (300 сек).
                     # ⚠️ В ПРОДАКШЕНЕ заменить на 86400 (24 часа)
-                    if time_passed >= 79200 and dn["quest_progress"].get("no_games", False):
+                    if time_passed >= 60 and dn["quest_progress"].get("no_games", False):
                         rewards_to_claim.append((uid, 4))
                 
                 # ⭐ Переключаем день ⭐
