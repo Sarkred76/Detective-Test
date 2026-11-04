@@ -13357,12 +13357,18 @@ async def darkest_night_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
         # ⭐ НОВОЕ: Если выполнено ровно 6 квестов — предлагаем обмен ⭐
         completed_count = len(completed_days)
         if completed_count == 6 and not dn.get("final_reward_claimed", False):
-            # Проверяем, есть ли у игрока все 6 карт наград ивента
+            # ⭐ Собираем ID наградных карт ТОЛЬКО за реально выполненные дни ⭐
+            event_reward_ids = []
+            for day in completed_days:
+                card_id = DARKEST_NIGHT_REWARDS.get(day)
+                if card_id:
+                    event_reward_ids.append(card_id)
+            
+            # Проверяем, что все эти карты есть в инвентаре игрока
             user_card_ids = user_data.get("cards", [])
-            event_reward_ids = [DARKEST_NIGHT_REWARDS.get(d) for d in completed_days if DARKEST_NIGHT_REWARDS.get(d)]
             has_all_event_cards = all(card_id in user_card_ids for card_id in event_reward_ids)
             
-            if has_all_event_cards:
+            if has_all_event_cards and len(event_reward_ids) == 6:
                 text = (
                     f"💀 <b>Темнейшая ночь</b>\n\n"
                     f"🏆 <b>Восстань!</b>\n\n"
@@ -13373,11 +13379,18 @@ async def darkest_night_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     f"🔹 Карты, которые будут потрачены:\n"
                 )
                 
-                # Показываем список карт, которые будут потрачены
+                # Показываем список карт, которые будут потрачены (с названиями)
                 for card_id in event_reward_ids:
                     card = find_card_by_id(card_id, data["cards"])
                     if card:
                         text += f"  • {card['title']} ({card['rarity']})\n"
+                
+                # Показываем, какой квест пропущен
+                all_days = set(range(1, 8))
+                completed_set = set(completed_days)
+                missing_days = sorted(all_days - completed_set)
+                if missing_days:
+                    text += f"\n⚠️ <i>Пропущен квест за день {missing_days[0]}.</i>\n"
                 
                 text += (
                     f"\n⚠️ <i>Это действие необратимо! Карты будут удалены из вашей коллекции.</i>\n\n"
@@ -13696,7 +13709,7 @@ async def darkest_night_exchange_cards(update: Update, context: ContextTypes.DEF
             await query.answer("❌ Ивент не активен", show_alert=True)
             return
         
-        # Проверяем, что выполнено ровно 6 квестов
+        # ⭐ Проверяем, что выполнено ровно 6 квестов ⭐
         completed_days = dn.get("completed_days", [])
         if len(completed_days) != 6:
             await query.answer("❌ Для обмена нужно ровно 6 выполненных квестов!", show_alert=True)
@@ -13707,11 +13720,20 @@ async def darkest_night_exchange_cards(update: Update, context: ContextTypes.DEF
             await query.answer("❌ Награда уже получена!", show_alert=True)
             return
         
-        # Собираем ID карт наград ивента, которые есть у игрока
-        event_reward_ids = [DARKEST_NIGHT_REWARDS.get(d) for d in completed_days if DARKEST_NIGHT_REWARDS.get(d)]
+        # ⭐ Собираем ID наград ТОЛЬКО за реально выполненные дни ⭐
+        event_reward_ids = []
+        for day in completed_days:
+            card_id = DARKEST_NIGHT_REWARDS.get(day)
+            if card_id:
+                event_reward_ids.append(card_id)
+        
+        if len(event_reward_ids) != 6:
+            await query.answer("❌ Не удалось определить карты для обмена!", show_alert=True)
+            return
+        
         user_card_ids = user_data.get("cards", [])
         
-        # Проверяем, что все карты наград есть в инвентаре
+        # ⭐ Проверяем, что ВСЕ карты наград есть в инвентаре ⭐
         missing_cards = [cid for cid in event_reward_ids if cid not in user_card_ids]
         if missing_cards:
             missing_names = []
@@ -13741,7 +13763,7 @@ async def darkest_night_exchange_cards(update: Update, context: ContextTypes.DEF
         # Добавляем Limited карту
         user_data["cards"].append(final_card_id)
         
-        # Отмечаем, что награда получена (чтобы нельзя было обменять повторно)
+        # Отмечаем, что награда получена
         dn["final_reward_claimed"] = True
         save_data(data)
         
@@ -13776,7 +13798,7 @@ async def darkest_night_exchange_cards(update: Update, context: ContextTypes.DEF
                     parse_mode="HTML"
                 )
             
-            logger.info(f"Игрок {user_id} обменял 6 карт ивента на Limited (#{final_card_id})")
+            logger.info(f"Игрок {user_id} обменял 6 карт ивента на Limited (#{final_card_id}). Выполненные дни: {completed_days}")
             
         except Exception as e:
             logger.error(f"Ошибка отправки Limited карты после обмена: {e}", exc_info=True)
