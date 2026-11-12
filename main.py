@@ -84,7 +84,7 @@ FRIENDS_AVATARS = [FRIENDS_AVATAR_1_URL, FRIENDS_AVATAR_2_URL]
 # ===== АВАТАРКА КЛАНА =====
 DEFAULT_CLAN_AVATAR = None  # None означает отсутствие аватарки (используется текст)
 
-COLLAB_PACK_IMAGE = "https://files.catbox.moe/ie7bsr.jpg" 
+COLLAB_PACK_IMAGE = "https:/ibb.co/WW4x1cpC" 
 COLLAB_PACK_CARD_IDS = [198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211] 
 
 # ===== ПРОТИВОСТОЯНИЕ (INJUSTICE) =====
@@ -13301,20 +13301,40 @@ async def add_collab_pack(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             parse_mode="Markdown"
         )
         
-        # Уведомляем игрока
+        # Уведомляем игрока с изображением коллаб пака
         try:
-            await context.bot.send_message(
+            caption = (
+                f"🎁 <b>Вам начислен Collaboration Pack!</b>\n\n"
+                f"📦 Накоплено паков: <b>{new_total}</b>\n\n"
+                f"Нажмите кнопку ниже, чтобы открыть его прямо сейчас!"
+            )
+    
+            keyboard = [[InlineKeyboardButton("🎁 Открыть сейчас", callback_data="shop_open_collab_pack")]]
+    
+            # Отправляем фото коллаб пака
+            await context.bot.send_photo(
                 chat_id=int(target_user_id),
-                text=(
-                    f"🎁 <b>Вам начислен Collaboration Pack!</b>\n\n"
-                    f"📦 Накоплено паков: <b>{new_total}</b>\n\n"
-                    f"Откройте их в любое время в разделе <b>Магазин → Боксы</b>."
-                ),
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎁 Открыть сейчас", callback_data="shop_open_collab_pack")]]),
+                photo=COLLAB_PACK_IMAGE,
+                caption=caption,
+                reply_markup=InlineKeyboardMarkup(keyboard),
                 parse_mode="HTML"
             )
         except Exception as notify_err:
-            logger.warning(f"Не удалось уведомить игрока {target_user_id}: {notify_err}")
+            logger.warning(f"Не удалось отправить фото коллаб пака игроку {target_user_id}: {notify_err}")
+            # Запасной вариант: отправляем текст без фото
+            try:
+                await context.bot.send_message(
+                    chat_id=int(target_user_id),
+                    text=(
+                        f"🎁 <b>Вам начислен Collaboration Pack!</b>\n\n"
+                        f"📦 Накоплено паков: <b>{new_total}</b>\n\n"
+                        f"Нажмите кнопку ниже, чтобы открыть его прямо сейчас!"
+                    ),
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎁 Открыть сейчас", callback_data="shop_open_collab_pack")]]),
+                    parse_mode="HTML"
+                )
+            except Exception as text_err:
+                logger.error(f"Не удалось уведомить игрока {target_user_id} даже текстом: {text_err}")
         
         logger.info(f"Админ выдал {amount} Collaboration Pack игроку {target_user_id}")
         
