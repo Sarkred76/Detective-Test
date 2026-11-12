@@ -7164,31 +7164,23 @@ async def shop_boxes(update: Update, context: ContextTypes.DEFAULT_TYPE, page: i
             f"• 10 бесплатных попыток 🔍\n\n"
             f"💳 Для покупки напишите: @Be9onder"
         )
-     elif current_box.get("is_collab_pack"):
-            pending = user_data.get("pending_collab_packs", 0)
-            text = (
-                f"🤝 **{current_box['name']}**\n\n"
-                f"💰 **Стоимость:**\n"
-                f"• 79₽ — 1 пак\n"
-                f"• 349₽ — 5 паков\n"
-                f"• 699₽ — 10 паков\n\n"
-                f"📜 Эксклюзивные карты из специальных коллабораций!\n"
-                f"💳 Покупка только через администратора."
-            )
-            
-            keyboard = []
-            keyboard.append([InlineKeyboardButton("💬 Написать @Be9onder", url="https://t.me/Be9onder")])
-            keyboard.append([InlineKeyboardButton("🔙 Назад в Магазин", callback_data="shop_menu")])
-            
-        # Формирование клавиатуры
-        keyboard = []
-        keyboard.append([InlineKeyboardButton("🔙 Назад в Магазин", callback_data="shop_menu")])
+    elif current_box.get("is_collab_pack"):
+        pending = user_data.get("pending_collab_packs", 0)
+        text = (
+            f"🤝 **{current_box['name']}**\n\n"
+            f"💰 **Стоимость:**\n"
+            f"• 79₽ — 1 пак\n"
+            f"• 349₽ — 5 паков\n"
+            f"• 699₽ — 10 паков\n\n"
+            f"💳 Для покупки напишите: @Be9onder"
+        )
+
     else:
         text = f"📦 **{current_box['name']}**\nЦена: {display_price} бэт-коинов"
     
     # Формирование клавиатуры
     keyboard = []
-    if current_box.get("is_season_box"):
+    if current_box.get("is_season_box") or current_box.get("is_collab_pack"):
         keyboard.append([InlineKeyboardButton("💬 Написать @Be9onder", url="https://t.me/Be9onder")])
     else:
         keyboard.append([InlineKeyboardButton(f"💰 Купить за {display_price} бэт-коинов", callback_data=f"shop_buy_box_{page}")])
