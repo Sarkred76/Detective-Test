@@ -84,7 +84,7 @@ FRIENDS_AVATARS = [FRIENDS_AVATAR_1_URL, FRIENDS_AVATAR_2_URL]
 # ===== АВАТАРКА КЛАНА =====
 DEFAULT_CLAN_AVATAR = None  # None означает отсутствие аватарки (используется текст)
 
-COLLAB_PACK_IMAGE = "https://files.catbox.moe/ie7bsr.jpg" 
+COLLAB_PACK_IMAGE = "AgACAgIAAxkBAAIgNmr1pyrGr7Hw0cvD4jybCkL0zWHuAALKHmsbBrGxS1kDT34h6HqkAQADAgADeQADPQQ" 
 COLLAB_PACK_CARD_IDS = [198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211] 
 
 # ===== ПРОТИВОСТОЯНИЕ (INJUSTICE) =====
