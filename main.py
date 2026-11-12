@@ -84,7 +84,7 @@ FRIENDS_AVATARS = [FRIENDS_AVATAR_1_URL, FRIENDS_AVATAR_2_URL]
 # ===== АВАТАРКА КЛАНА =====
 DEFAULT_CLAN_AVATAR = None  # None означает отсутствие аватарки (используется текст)
 
-COLLAB_PACK_IMAGE = "https:/ibb.co/WW4x1cpC" 
+COLLAB_PACK_IMAGE = "https://files.catbox.moe/ie7bsr.jpg" 
 COLLAB_PACK_CARD_IDS = [198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211] 
 
 # ===== ПРОТИВОСТОЯНИЕ (INJUSTICE) =====
@@ -13114,7 +13114,7 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text("❌ Ошибка при отмене действия")
 
 async def open_collab_pack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Открывает 1 накопленный Collaboration Pack."""
+    """Открывает Collaboration Pack и удаляет сообщение с кнопкой после использования."""
     try:
         query = update.callback_query
         user_id = str(query.from_user.id)
@@ -13125,14 +13125,16 @@ async def open_collab_pack(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await query.answer("❌ Профиль не найден", show_alert=True)
             return
         
-        # Миграция: инициализируем поле, если его нет
-        if "pending_collab_packs" not in user_data:
-            user_data["pending_collab_packs"] = 0
+        pending = user_data.get("pending_collab_packs", 0)
         
-        pending = user_data["pending_collab_packs"]
-        
+        # ⭐ ГЛАВНАЯ ПРОВЕРКА: Если паков нет, удаляем сообщение с кнопкой ⭐
         if pending <= 0:
-            await query.answer("❌ У вас нет Collaboration Pack для открытия!", show_alert=True)
+            await query.answer("❌ Этот пак уже был открыт!", show_alert=True)
+            try:
+                await query.message.delete()
+            except:
+                # Если удалить не вышло, просто убираем клавиатуру
+                await query.edit_message_text("✅ Пак уже открыт.", reply_markup=None)
             return
         
         # Проверяем, что список карт не пуст
@@ -13148,18 +13150,17 @@ async def open_collab_pack(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await query.answer("❌ Ошибка: карта из пака не найдена в базе!", show_alert=True)
             return
         
-        # Списываем 1 пак и добавляем карту
+        # ⭐ Списываем 1 пак и добавляем карту ⭐
         user_data["pending_collab_packs"] = pending - 1
         user_data.setdefault("cards", []).append(card_id)
         save_data(data)
         
-        # Формируем caption
-        new_pending = user_data["pending_collab_packs"]
+        # Формируем caption для новой карты
         caption = (
             f"🎉 <b>Collaboration Pack открыт!</b>\n\n"
-            f"🃏 Вам выпала карта: <b>{card['title']}</b>\n"
+            f"🃏 Вы получили карту: <b>{card['title']}</b>\n"
             f"🌟 Редкость: {card['rarity']}\n\n"
-            f"📦 Осталось паков: {new_pending}"
+            f"📦 Осталось нераспечатанных паков: {user_data['pending_collab_packs']}"
         )
         
         # Определяем тип медиа
@@ -13170,13 +13171,10 @@ async def open_collab_pack(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             (isinstance(media_value, str) and media_value.lower().endswith((".mp4", ".webm", ".gif")))
         )
         
-        # Клавиатура под сообщением с картой
-        card_keyboard = []
-        if new_pending > 0:
-            card_keyboard.append([InlineKeyboardButton(f"🎁 Открыть ещё ({new_pending} шт.)", callback_data="shop_open_collab_pack")])
-        card_keyboard.append([InlineKeyboardButton("🔙 В магазин", callback_data="shop_menu")])
+        # Клавиатура под НОВЫМ сообщением с картой (чтобы можно было вернуться в магазин, если хочется)
+        card_keyboard = [[InlineKeyboardButton("🔙 В магазин", callback_data="shop_menu")]]
         
-        # Отправляем карту отдельным сообщением
+        # ⭐ Отправляем карту ОТДЕЛЬНЫМ сообщением ⭐
         try:
             if is_animation:
                 await context.bot.send_animation(
@@ -13195,7 +13193,7 @@ async def open_collab_pack(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                     parse_mode="HTML"
                 )
         except Exception as send_err:
-            logger.warning(f"Не удалось отправить медиа карты из коллаб-пака: {send_err}. Отправляю текст.")
+            logger.warning(f"Не удалось отправить медиа: {send_err}. Отправляю текст.")
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
                 text=caption,
@@ -13203,30 +13201,15 @@ async def open_collab_pack(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 parse_mode="HTML"
             )
         
-        # Обновляем старое сообщение
-        if new_pending > 0:
-            await query.edit_message_text(
-                f"✅ <b>Collaboration Pack открыт!</b>\n"
-                f"🃏 Получено: <b>{card['title']}</b> ({card['rarity']})\n"
-                f"📦 Осталось паков: <b>{new_pending}</b> шт.",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton(f"🎁 Открыть ещё ({new_pending} шт.)", callback_data="shop_open_collab_pack")],
-                    [InlineKeyboardButton("🔙 В магазин", callback_data="shop_menu")]
-                ]),
-                parse_mode="HTML"
-            )
-        else:
-            await query.edit_message_text(
-                f"✅ <b>Collaboration Pack открыт!</b>\n"
-                f"🃏 Получено: <b>{card['title']}</b> ({card['rarity']})\n"
-                f"💡 <i>У вас больше нет накопленных паков.</i>",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 В магазин", callback_data="shop_menu")]
-                ]),
-                parse_mode="HTML"
-            )
+        # ⭐ УДАЛЯЕМ старое сообщение с кнопкой "Открыть", чтобы её нельзя было нажать снова ⭐
+        try:
+            await query.message.delete()
+        except Exception as del_err:
+            logger.warning(f"Не удалось удалить сообщение с кнопкой: {del_err}")
+            # Запасной вариант: убираем кнопку из сообщения
+            await query.edit_message_text("✅ Collaboration Pack успешно открыт!", reply_markup=None)
         
-        logger.info(f"Игрок {user_id} открыл Collaboration Pack, получил карту #{card_id} (осталось: {new_pending})")
+        logger.info(f"Игрок {user_id} открыл Collaboration Pack, получил карту #{card_id}")
         
     except Exception as e:
         logger.error(f"Ошибка open_collab_pack: {e}", exc_info=True)
@@ -13242,14 +13225,13 @@ async def add_collab_pack(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await update.message.reply_text("🚫 Только для администратора!")
             return
         
-        # ⭐ Проверяем аргументы ⭐
         if not context.args or len(context.args) < 2:
             await update.message.reply_text(
                 "ℹ️ **Формат команды:**\n"
                 "`/add_collab_pack [ID_или_@никнейм] [количество]`\n\n"
                 "**Примеры:**\n"
-                "`/add_collab_pack 881692999 5` — выдать 5 паков по ID\n"
-                "`/add_collab_pack @username 3` — выдать 3 пака по никнейму",
+                "`/add_collab_pack 881692999 1` — выдать 1 пак\n"
+                "`/add_collab_pack @username 3` — выдать 3 пака (придёт 3 сообщения)",
                 parse_mode="Markdown"
             )
             return
@@ -13265,7 +13247,7 @@ async def add_collab_pack(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await update.message.reply_text("❌ Количество должно быть больше 0!")
             return
         
-        # ⭐ Определяем ID игрока (по ID или @никнейму) ⭐
+        # Определяем ID игрока
         target_user_id = None
         if target_input.startswith("@"):
             username_to_find = target_input[1:].strip().lower()
@@ -13283,59 +13265,53 @@ async def add_collab_pack(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await update.message.reply_text("❌ Игрок с таким ID не найден!")
             return
         
-        # Миграция: инициализируем поле
+        # Инициализируем поле, если его нет
         if "pending_collab_packs" not in data["users"][target_user_id]:
             data["users"][target_user_id]["pending_collab_packs"] = 0
         
-        # Начисляем паки
-        data["users"][target_user_id]["pending_collab_packs"] += amount
-        new_total = data["users"][target_user_id]["pending_collab_packs"]
-        save_data(data)
+        # Отправляем игроку ОТДЕЛЬНОЕ сообщение для каждого пака
+        # Это гарантирует, что у каждого пака будет своя уникальная кнопка
+        success_count = 0
+        for _ in range(amount):
+            data["users"][target_user_id]["pending_collab_packs"] += 1
+            new_total = data["users"][target_user_id]["pending_collab_packs"]
+            save_data(data)
+            
+            try:
+                caption = (
+                    f"🎁 <b>Вам начислен Collaboration Pack!</b>\n\n"
+                    f"📦 Всего накоплено: <b>{new_total}</b>\n\n"
+                    f"Нажмите кнопку ниже, чтобы открыть его прямо сейчас!"
+                )
+                keyboard = [[InlineKeyboardButton("🎁 Открыть Collaboration Pack", callback_data="open_collab_single")]]
+                
+                await context.bot.send_photo(
+                    chat_id=int(target_user_id),
+                    photo=COLLAB_PACK_IMAGE, # Убедись, что эта константа задана в начале файла!
+                    caption=caption,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode="HTML"
+                )
+                success_count += 1
+            except Exception as notify_err:
+                logger.warning(f"Не удалось отправить фото коллаб пака игроку {target_user_id}: {notify_err}")
+                # Запасной вариант: текст
+                try:
+                    await context.bot.send_message(
+                        chat_id=int(target_user_id),
+                        text=caption,
+                        reply_markup=InlineKeyboardMarkup(keyboard),
+                        parse_mode="HTML"
+                    )
+                    success_count += 1
+                except:
+                    pass
         
-        # Уведомляем админа
         await update.message.reply_text(
             f"✅ **Collaboration Pack выдан!**\n"
             f"👤 Игрок: {target_user_id}\n"
-            f"📦 Начислено: {amount} шт.\n"
-            f"📊 Всего накоплено: {new_total}",
-            parse_mode="Markdown"
+            f"📦 Успешно отправлено сообщений: {success_count} из {amount}"
         )
-        
-        # Уведомляем игрока с изображением коллаб пака
-        try:
-            caption = (
-                f"🎁 <b>Вам начислен Collaboration Pack!</b>\n\n"
-                f"📦 Накоплено паков: <b>{new_total}</b>\n\n"
-                f"Нажмите кнопку ниже, чтобы открыть его прямо сейчас!"
-            )
-    
-            keyboard = [[InlineKeyboardButton("🎁 Открыть сейчас", callback_data="shop_open_collab_pack")]]
-    
-            # Отправляем фото коллаб пака
-            await context.bot.send_photo(
-                chat_id=int(target_user_id),
-                photo=COLLAB_PACK_IMAGE,
-                caption=caption,
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode="HTML"
-            )
-        except Exception as notify_err:
-            logger.warning(f"Не удалось отправить фото коллаб пака игроку {target_user_id}: {notify_err}")
-            # Запасной вариант: отправляем текст без фото
-            try:
-                await context.bot.send_message(
-                    chat_id=int(target_user_id),
-                    text=(
-                        f"🎁 <b>Вам начислен Collaboration Pack!</b>\n\n"
-                        f"📦 Накоплено паков: <b>{new_total}</b>\n\n"
-                        f"Нажмите кнопку ниже, чтобы открыть его прямо сейчас!"
-                    ),
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎁 Открыть сейчас", callback_data="shop_open_collab_pack")]]),
-                    parse_mode="HTML"
-                )
-            except Exception as text_err:
-                logger.error(f"Не удалось уведомить игрока {target_user_id} даже текстом: {text_err}")
-        
         logger.info(f"Админ выдал {amount} Collaboration Pack игроку {target_user_id}")
         
     except Exception as e:
@@ -13458,7 +13434,7 @@ def main() -> None:
             CallbackQueryHandler(shop_open_rolls_box, pattern=r"^shop_open_rolls_box$"),
             CallbackQueryHandler(open_single_rolls_box, pattern=r"^open_single_rolls_box$"),
             CallbackQueryHandler(clan_shop_max_expanded, pattern=r"^clan_shop_max_expanded$"),
-            CallbackQueryHandler(open_collab_pack, pattern=r"^shop_open_collab_pack$"),
+            CallbackQueryHandler(open_collab_pack, pattern=r"^open_collab_single$"),
         ]
 
         for handler in handlers:
