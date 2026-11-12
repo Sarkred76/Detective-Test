@@ -13233,7 +13233,7 @@ async def open_collab_pack(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await query.answer("❌ Ошибка при открытии пака", show_alert=True)
 
 async def add_collab_pack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Админская команда: начислить Collaboration Pack игроку."""
+    """Админская команда: начислить Collaboration Pack игроку по ID или @никнейму."""
     try:
         user_id = str(update.effective_user.id)
         data = load_data()
@@ -13242,17 +13242,19 @@ async def add_collab_pack(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await update.message.reply_text("🚫 Только для администратора!")
             return
         
+        # ⭐ Проверяем аргументы ⭐
         if not context.args or len(context.args) < 2:
             await update.message.reply_text(
                 "ℹ️ **Формат команды:**\n"
-                "`/add_collab_pack [ID_игрока] [количество]`\n\n"
-                "**Пример:**\n"
-                "`/add_collab_pack 881692999 5`",
+                "`/add_collab_pack [ID_или_@никнейм] [количество]`\n\n"
+                "**Примеры:**\n"
+                "`/add_collab_pack 881692999 5` — выдать 5 паков по ID\n"
+                "`/add_collab_pack @username 3` — выдать 3 пака по никнейму",
                 parse_mode="Markdown"
             )
             return
         
-        target_id = context.args[0]
+        target_input = context.args[0]
         try:
             amount = int(context.args[1])
         except ValueError:
@@ -13263,23 +13265,37 @@ async def add_collab_pack(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await update.message.reply_text("❌ Количество должно быть больше 0!")
             return
         
-        if target_id not in data["users"]:
+        # ⭐ Определяем ID игрока (по ID или @никнейму) ⭐
+        target_user_id = None
+        if target_input.startswith("@"):
+            username_to_find = target_input[1:].strip().lower()
+            for uid, udata in data["users"].items():
+                if udata.get("username", "").lower() == username_to_find:
+                    target_user_id = uid
+                    break
+            if not target_user_id:
+                await update.message.reply_text(f"⚠️ Игрок с никнеймом @{username_to_find} не найден!")
+                return
+        else:
+            target_user_id = target_input
+        
+        if target_user_id not in data["users"]:
             await update.message.reply_text("❌ Игрок с таким ID не найден!")
             return
         
         # Миграция: инициализируем поле
-        if "pending_collab_packs" not in data["users"][target_id]:
-            data["users"][target_id]["pending_collab_packs"] = 0
+        if "pending_collab_packs" not in data["users"][target_user_id]:
+            data["users"][target_user_id]["pending_collab_packs"] = 0
         
         # Начисляем паки
-        data["users"][target_id]["pending_collab_packs"] += amount
-        new_total = data["users"][target_id]["pending_collab_packs"]
+        data["users"][target_user_id]["pending_collab_packs"] += amount
+        new_total = data["users"][target_user_id]["pending_collab_packs"]
         save_data(data)
         
         # Уведомляем админа
         await update.message.reply_text(
             f"✅ **Collaboration Pack выдан!**\n"
-            f"👤 Игрок: {target_id}\n"
+            f"👤 Игрок: {target_user_id}\n"
             f"📦 Начислено: {amount} шт.\n"
             f"📊 Всего накоплено: {new_total}",
             parse_mode="Markdown"
@@ -13288,26 +13304,24 @@ async def add_collab_pack(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         # Уведомляем игрока
         try:
             await context.bot.send_message(
-                chat_id=int(target_id),
+                chat_id=int(target_user_id),
                 text=(
                     f"🎁 <b>Вам начислен Collaboration Pack!</b>\n\n"
                     f"📦 Накоплено паков: <b>{new_total}</b>\n\n"
                     f"Откройте их в любое время в разделе <b>Магазин → Боксы</b>."
                 ),
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🎁 Открыть сейчас", callback_data="shop_open_collab_pack")]
-                ]),
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎁 Открыть сейчас", callback_data="shop_open_collab_pack")]]),
                 parse_mode="HTML"
             )
         except Exception as notify_err:
-            logger.warning(f"Не удалось уведомить игрока {target_id}: {notify_err}")
+            logger.warning(f"Не удалось уведомить игрока {target_user_id}: {notify_err}")
         
-        logger.info(f"Админ выдал {amount} Collaboration Pack игроку {target_id}")
+        logger.info(f"Админ выдал {amount} Collaboration Pack игроку {target_user_id}")
         
     except Exception as e:
         logger.error(f"Ошибка add_collab_pack: {e}", exc_info=True)
         await update.message.reply_text("❌ Ошибка при выдаче Collaboration Pack")
-
+        
 # ===== ЗАПУСК БОТА =====
 
 def main() -> None:
